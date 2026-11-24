@@ -42,6 +42,12 @@ jobs:
           extract 7cf32cd611e2cad51408a2daaa974a105868f36e85a3e2c43706a7c6efc9d556 \
             https://ghcr.io/v2/homebrew/core/micropython/blobs/sha256:7cf32cd611e2cad51408a2daaa974a105868f36e85a3e2c43706a7c6efc9d556 brew \
             -H 'Authorization: Bearer QQ=='
+          # Homebrew normally relocates the ELF interpreter when pouring the bottle.
+          cat > micropython <<'SH'
+          #!/bin/sh
+          exec /lib64/ld-linux-x86-64.so.2 "${0%/*}/brew/1.29.0/bin/micropython" "$@"
+          SH
+          chmod +x micropython
           extract 94238f39f35e64f8703f29889999552ed86fc3d8644e3947ad9f30ef91525dcf \
             https://github.com/oracle/graalpython/releases/download/graal-25.5.5/graalpy3.13-community-25.5.5-linux-amd64.tar.gz graalpy
 
@@ -54,7 +60,7 @@ jobs:
             -o "$runtimes/Python-3.11.17.tar.xz"
           "$runtimes/cpython/bin/python3.11" -B measure.py \
             --pypy "$runtimes/pypy/bin/pypy3.11" \
-            --micropython "$runtimes/brew/1.29.0/bin/micropython" \
+            --micropython "$runtimes/micropython" \
             --graalpy "$runtimes/graalpy/bin/graalpy" \
             --source "$runtimes/Python-3.11.17.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"
 
