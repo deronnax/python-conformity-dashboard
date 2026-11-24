@@ -1,0 +1,61 @@
+:root {
+  color-scheme: light;
+  --ink: #17283a;
+  --muted: #4c6070;
+  --line: #d5e0e6;
+  --paper: #fff;
+  --accent: #145b55;
+  font: 100%/1.5 system-ui, sans-serif;
+  color: var(--ink);
+  background: #eef4f5;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 75rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3.75rem); }
+h1 { font-size: clamp(2.25rem, 6vw, 4.1rem); line-height: 1; letter-spacing: -.055em; margin: 0; }
+p { margin: 0; }
+a { color: var(--accent); text-underline-offset: .16em; }
+button, select { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 3px solid #267d75; outline-offset: 3px; }
+.page-header { display: flex; justify-content: space-between; flex-wrap: wrap; align-items: end; gap: 1rem; }
+.page-header p { margin-top: .75rem; color: var(--muted); }
+.download { font-size: .9rem; font-weight: 650; }
+.metadata { border-top: 1px solid var(--line); margin: 1.5rem 0; padding-top: .75rem; color: var(--muted); font-size: .9rem; }
+.comparison { padding: clamp(1rem, 3vw, 1.75rem); background: var(--paper); border: 1px solid var(--line); border-radius: 1rem; }
+.switch { display: inline-flex; flex-wrap: wrap; gap: .25rem; background: #edf3f3; padding: .25rem; border-radius: .6rem; }
+.switch button { padding: .45rem .8rem; border: 0; border-radius: .4rem; background: transparent; font-weight: 650; }
+.switch button[aria-pressed="true"] { color: #fff; background: var(--accent); }
+.description { margin: .8rem 0 1.1rem; color: var(--muted); }
+.summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .7rem; }
+.summary-card { padding: .9rem; border: 1px solid var(--line); border-radius: .65rem; }
+.runtime-name { font-weight: 650; }
+.score { font-weight: 760; font-size: 1.65rem; font-variant-numeric: tabular-nums; }
+progress { display: block; width: 100%; height: .45rem; margin-top: .35rem; accent-color: var(--accent); }
+.summary-detail { font-size: .875rem; color: var(--muted); margin-top: .5rem; }
+.filters { display: flex; align-items: center; flex-wrap: wrap; gap: .6rem 1.2rem; margin: 1.4rem 0 .65rem; }
+.filters label { display: flex; align-items: center; gap: .45rem; }
+.filters select { appearance: none; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%234c6070' stroke-width='1.5'/%3E%3C/svg%3E") right .65rem center / .65rem no-repeat; border: 1px solid #a8bac4; border-radius: .35rem; padding: .3rem 1.65rem .3rem .55rem; }
+input[type="checkbox"] { width: 1rem; height: 1rem; accent-color: var(--accent); margin: 0; }
+#count { margin-inline-start: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.table-scroll { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+th, td { text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); padding: .65rem .55rem; }
+thead th { background: #edf3f3; white-space: nowrap; }
+tbody th { width: 49%; min-width: 12rem; font-weight: normal; }
+tbody tr:nth-child(even) { background: #f7f9fa; }
+summary { cursor: pointer; }
+summary code { overflow-wrap: anywhere; }
+code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
+.case-title { display: block; margin-inline-start: 1.15rem; color: var(--muted); }
+.case-detail { margin: .6rem .1rem .25rem 1.15rem; }
+.case-detail pre { font-size: .84rem; background: #eaf1f2; margin: .3rem 0 .55rem; padding: .5rem; border-radius: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.detail-runtime { margin-top: .65rem; font-weight: 650; }
+.status { display: inline-block; padding: .18rem .45rem; border-radius: .3rem; background: #e8edf2; color: #334860; font-weight: 650; white-space: nowrap; }
+.status.passed { background: #deefe5; color: #205536; }
+.status.different, .status.error { background: #fbe7e1; color: #832d1a; }
+.status.missing { background: #fff0ca; color: #664500; }
+.empty { color: var(--muted); padding: 1rem; }
+.methodology { margin-top: 1.15rem; padding: .9rem 1rem; background: #e5eeee; border-radius: .6rem; }
+.methodology summary { font-weight: 650; }
+.methodology p { margin-top: .55rem; max-width: 75ch; }

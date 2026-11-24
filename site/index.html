@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conformité Python</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="dashboard.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div>
+        <h1>Conformité Python</h1>
+        <p>Comportements observés sur les API publiques de la bibliothèque standard.</p>
+      </div>
+      <a class="download" href="results.json" download>Télécharger les résultats JSON</a>
+    </header>
+    <p class="metadata" id="metadata"></p>
+
+    <section class="comparison" aria-label="Résultats de la comparaison">
+      <div class="switch" aria-label="Corpus">
+        <button type="button" data-suite="common" aria-pressed="true">Cas communs</button>
+        <button type="button" data-suite="upstream" aria-pressed="false">Tests CPython</button>
+      </div>
+      <p id="description" class="description"></p>
+      <div id="summaries" class="summaries" aria-label="Résultats par interpréteur"></div>
+      <div class="filters">
+        <label>Module <select id="module"></select></label>
+        <label class="only-differences"><input type="checkbox" id="only-differences"> Écarts et cas non mesurés</label>
+        <span id="count" role="status"></span>
+      </div>
+      <div class="table-scroll" role="region" aria-label="Tableau des cas" tabindex="0">
+        <table>
+          <thead id="table-head"></thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <details class="methodology">
+      <summary>Méthode et périmètre</summary>
+      <p>Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on compare le nom de la classe d’exception.</p>
+      <p>La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython et PyPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.</p>
+      <p>Les résultats portent sur ces cas, ces versions et cette plateforme. La colonne MicroPython concerne le port Unix et ses modules fournis. Chaque ligne donne accès à son cas source.</p>
+    </details>
+    <noscript>JavaScript est nécessaire pour afficher et filtrer le tableau. Les résultats sont disponibles au format JSON.</noscript>
+  </main>
+  <script type="application/json" id="results"><!-- RESULTS --></script>
+</body>
+</html>

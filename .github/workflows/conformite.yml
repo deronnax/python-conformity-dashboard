@@ -1,0 +1,67 @@
+name: Conformité Python
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mesure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Récupérer les interpréteurs précompilés
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtimes="$RUNNER_TEMP/conformite"
+          mkdir -p "$runtimes"
+          cd "$runtimes"
+
+          extract() {
+            local hash="$1" url="$2" target="$3"
+            shift 3
+            curl -fLsS --retry 3 --max-time 120 "$@" "$url" -o runtime.tar.gz
+            printf '%s  runtime.tar.gz\n' "$hash" | sha256sum --check
+            mkdir -p "$target"
+            tar -xzf runtime.tar.gz --strip-components=1 -C "$target"
+            rm runtime.tar.gz
+          }
+
+          extract 7cc8d9dce9ea23c31267e7f244005c8979da04794b7737a3a30e62b03abeb120 \
+            https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.11.17%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz cpython
+          extract 706965bcf372752ba69dafd59d860e51bc2fadbb0f8a47cec3426125d7058ceb \
+            https://downloads.python.org/pypy/pypy3.11-v8.0.1-linux64.tar.gz pypy
+          extract 7cf32cd611e2cad51408a2daaa974a105868f36e85a3e2c43706a7c6efc9d556 \
+            https://ghcr.io/v2/homebrew/core/micropython/blobs/sha256:7cf32cd611e2cad51408a2daaa974a105868f36e85a3e2c43706a7c6efc9d556 brew \
+            -H 'Authorization: Bearer QQ=='
+          extract 94238f39f35e64f8703f29889999552ed86fc3d8644e3947ad9f30ef91525dcf \
+            https://github.com/oracle/graalpython/releases/download/graal-25.5.5/graalpy3.13-community-25.5.5-linux-amd64.tar.gz graalpy
+
+      - name: Mesurer et générer le dashboard
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtimes="$RUNNER_TEMP/conformite"
+          curl -fLsS --retry 3 --max-time 120 https://www.python.org/ftp/python/3.11.17/Python-3.11.17.tar.xz \
+            -o "$runtimes/Python-3.11.17.tar.xz"
+          "$runtimes/cpython/bin/python3.11" -B measure.py \
+            --pypy "$runtimes/pypy/bin/pypy3.11" \
+            --micropython "$runtimes/brew/1.29.0/bin/micropython" \
+            --graalpy "$runtimes/graalpy/bin/graalpy" \
+            --source "$runtimes/Python-3.11.17.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publier l’artefact du dashboard
+        if: ${{ !cancelled() && hashFiles('dist/index.html') != '' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: dashboard-conformite
+          path: dist/
+          if-no-files-found: error
