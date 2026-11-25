@@ -23,7 +23,7 @@ const translations = {
     methodology: "Methodology and scope",
     methodCases: "Shared cases compare observed types and values with CPython. For invalid inputs, they check whether callers can catch the exception using the expected public class.",
     methodUpstream: "The CPython tests view runs selected upstream test methods on CPython and PyPy. The JSON test harness enables the CPython accelerator when available. Shared cases import the module as usual.",
-    methodScope: "These results apply to the cases, versions and platform shown. MicroPython results refer to the Unix port and its bundled modules. Each row links to the source test.",
+    methodScope: "These results apply to the cases, versions and platform shown. The shared cases cover APIs available in CPython 3.11. A module can be unavailable in a specific build. Each row links to the source test.",
     reference: "CPython reference",
     source: "View source test",
     passedOn: (runtime) => `Cases passed on ${runtime}`,
@@ -63,7 +63,7 @@ const translations = {
     methodology: "Méthode et périmètre",
     methodCases: "Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on vérifie que le code appelant peut intercepter l’exception avec la classe publique attendue.",
     methodUpstream: "La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython et PyPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.",
-    methodScope: "Les résultats portent sur ces cas, ces versions et cette plateforme. La colonne MicroPython concerne le port Unix et ses modules fournis. Chaque ligne donne accès à son cas source.",
+    methodScope: "Les résultats portent sur ces cas, ces versions et cette plateforme. Les cas communs couvrent des API disponibles dans CPython 3.11. Un module peut être absent d’un binaire donné. Chaque ligne donne accès à son cas source.",
     reference: "Référence CPython",
     source: "Voir le test source",
     passedOn: (runtime) => `Cas réussis sur ${runtime}`,
@@ -132,7 +132,7 @@ function renderSummaries(rows, runtimes) {
     progress.setAttribute("aria-label", copy.passedOn(runtime.name));
     const version = runtime.version.split("\n");
     let build = version[0].split(" ")[0];
-    const namedBuild = version.join(" ").match(/(?:PyPy|MicroPython) v?([\d.]+)/i);
+    const namedBuild = version.join(" ").match(/(?:PyPy|RustPython) v?([\d.]+)/i);
     if (namedBuild && runtime.id !== "cpython") build = namedBuild[1];
     const label = element("p", `${runtime.name} ${build}`, "runtime-name");
     label.title = runtime.version;

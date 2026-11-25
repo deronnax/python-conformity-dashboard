@@ -13,6 +13,7 @@ import tarfile
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from textwrap import dedent, indent
 from urllib.request import urlretrieve
 
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
@@ -22,23 +23,17 @@ ROOT = Path(__file__).resolve().parent
 ARCHIVE = f"Python-{CPYTHON_VERSION}.tar.xz"
 ARCHIVE_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/{ARCHIVE}"
 ARCHIVE_SHA256 = "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
-RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "micropython": "MicroPython Unix", "graalpy": "GraalPy"}
+RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython"}
 
 
-def run(executable, runtime, *args, cwd):
-    env = {key: value for key, value in os.environ.items()
-           if not key.startswith("PYTHON") and key != "MICROPYPATH"}
-    if runtime == "micropython":
-        flags = []
-        env["MICROPYPATH"] = ".frozen"
-    else:
-        flags = ["-I", "-S", "-B"]
-    return subprocess.run([executable, *flags, *args], cwd=cwd, env=env, timeout=30,
+def run(executable, *args, cwd):
+    env = {key: value for key, value in os.environ.items() if not key.startswith(("PYTHON", "RUSTPYTHON"))}
+    return subprocess.run([executable, "-I", "-S", "-B", *args], cwd=cwd, env=env, timeout=30,
                           capture_output=True, encoding="utf-8", errors="replace")
 
 
 def identify(executable, runtime, cwd):
-    info = run(executable, runtime, "-c", "import sys; print(sys.implementation.name); print(sys.version)", cwd=cwd)
+    info = run(executable, "-c", "import sys; print(sys.implementation.name); print(sys.version)", cwd=cwd)
     name, _, version = info.stdout.strip().partition("\n")
     if info.returncode or name != runtime or not version:
         raise ValueError(f"{executable} ne correspond pas à {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
@@ -79,9 +74,9 @@ def result(status, detail="", *, detail_fr=None):
     return outcome
 
 
-def invoke(executable, runtime, *args, cwd):
+def invoke(executable, *args, cwd):
     try:
-        completed = run(executable, runtime, *args, cwd=cwd)
+        completed = run(executable, *args, cwd=cwd)
     except subprocess.TimeoutExpired:
         return result("timeout", "The process exceeded 30 seconds.", detail_fr="Le processus a dépassé 30 secondes.")
     except OSError as exc:
@@ -95,8 +90,8 @@ def invoke(executable, runtime, *args, cwd):
     return completed.stdout.strip()
 
 
-def observe(executable, runtime, probe, cwd):
-    module, attribute = probe.api.split(".")
+def observe(executable, probe, cwd):
+    module, *attributes = probe.api.split(".")
     expected_exception = ""
     exception_type = "None"
     if probe.expected.startswith("exception: "):
@@ -104,21 +99,22 @@ def observe(executable, runtime, probe, cwd):
         owner, _, name = expected_exception.rpartition(".")
         namespace = "module" if owner else "__import__('builtins')"
         exception_type = f"getattr({namespace}, {name!r}, None)"
+    preparation = indent(dedent(probe.setup).strip(), "            ")
     code = f"""
 try:
     module = __import__({module!r})
 except ImportError as exc:
-    if getattr(exc, 'name', None) == {module!r} or str(exc) == "no module named '{module}'":
-        print('missing', {module!r})
-    else:
-        print('blocked', str(exc))
+    print('missing', {module!r}, str(exc))
 else:
     try:
-        api = getattr(module, {attribute!r})
+        api = module
+        for attribute in {attributes!r}:
+            api = getattr(api, attribute)
     except AttributeError:
         print('missing', {probe.api!r})
     else:
         try:
+{preparation}
             value = {probe.expression}
         except Exception as exc:
             expected = {exception_type}
@@ -129,7 +125,7 @@ else:
         else:
             print('value', type(value).__name__, repr(value))
 """
-    output = invoke(executable, runtime, "-c", code, cwd=cwd)
+    output = invoke(executable, "-c", code, cwd=cwd)
     if isinstance(output, dict):
         return output
     kind, _, payload = output.partition(" ")
@@ -157,10 +153,10 @@ def french_observation(observation):
 def comparisons(executables, cwd):
     rows = []
     for probe in PROBES:
-        baseline = observe(executables["cpython"], "cpython", probe, cwd)
+        baseline = observe(executables["cpython"], probe, cwd)
         outcomes = {}
         for runtime, executable in executables.items():
-            observation = baseline if runtime == "cpython" else observe(executable, runtime, probe, cwd)
+            observation = baseline if runtime == "cpython" else observe(executable, probe, cwd)
             if isinstance(observation, dict):
                 outcome = observation
             elif baseline != probe.expected:
@@ -172,9 +168,11 @@ def comparisons(executables, cwd):
                 outcome = result("passed" if observation == baseline else "different", observation,
                                  detail_fr=translated if translated != observation else None)
             outcomes[runtime] = outcome
+        snippet = "\n".join(part for part in (dedent(probe.setup).strip(), probe.expression) if part)
+        snippet = snippet.replace("api(", probe.api + "(").replace("module.", probe.module + ".")
         rows.append({"id": probe.id, "module": probe.module, "api": probe.api, "title": probe.title,
                      "titleFr": probe.title_fr,
-                     "code": probe.expression.replace("api(", probe.api + "("), "source": source_url(probe.upstream),
+                     "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream),
                      "sourceTest": probe.upstream, "outcomes": outcomes})
     return rows
 
@@ -185,7 +183,7 @@ def upstream_results(executables, tests, cwd):
         for method in methods:
             outcomes = {}
             for runtime in ("cpython", "pypy"):
-                observation = invoke(executables[runtime], runtime, str(ROOT / "upstream.py"),
+                observation = invoke(executables[runtime], str(ROOT / "upstream.py"),
                                      str(tests.parent), method, cwd=cwd)
                 try:
                     outcomes[runtime] = observation if isinstance(observation, dict) else json.loads(observation)
@@ -215,8 +213,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cpython", default=sys.executable, help=f"Binaire de référence {CPYTHON_VERSION}")
     parser.add_argument("--pypy", default="pypy3.11", help=f"Binaire PyPy ciblant Python {CPYTHON_VERSION}")
-    parser.add_argument("--micropython", help="Binaire du port Unix. Ajouté au corpus commun si fourni.")
     parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
+    parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
     parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
     parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Dossier du site généré")
     args = parser.parse_args()
