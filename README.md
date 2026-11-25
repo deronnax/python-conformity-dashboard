@@ -16,13 +16,15 @@ La commande télécharge l’archive source officielle de CPython, vérifie son 
 
 Le dashboard s’affiche en anglais par défaut et en français si c’est la première langue prise en charge dans les préférences du navigateur. Le menu de langue permet de choisir une autre langue et mémorise ce choix.
 
+`--applications` télécharge dans le dossier temporaire les distributions épinglées de Django 5.2.19, Bottle 0.13.4 et NumPy 2.4.4. Il vérifie leurs empreintes et les extrait pour l’import, sans toucher aux environnements installés. L’essai NumPy vérifie le suffixe d’extension natif attendu par l’interpréteur sur Linux x86-64. Les scénarios testent le rendu Django, un agrégat avec annulation de transaction SQLite, une route WSGI Bottle et des opérations NumPy.
+
 `--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://formulae.brew.sh/formula/rustpython). `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
 
 ## GitHub Actions
 
 Le workflow **Conformité Python** s’exécute sur Linux x86-64 à chaque push sur `main` et peut être lancé manuellement. Il télécharge les binaires précompilés de CPython, PyPy, GraalPy Community 25.5.5 et RustPython 0.6.0 (paquet Homebrew), puis vérifie leurs empreintes. Le lanceur GraalPy natif est autonome.
 
-Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décompresser l’archive puis ouvrir `index.html`. Une incompatibilité observée est un résultat de mesure. Une référence CPython qui échoue rend le job rouge et reste visible dans le rapport si celui-ci a pu être produit.
+Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décompresser l’archive puis ouvrir `index.html`. Le workflow active les essais applicatifs. Une incompatibilité observée est un résultat de mesure. Un échec de la référence CPython dans le corpus de la bibliothèque standard rend le job rouge et reste visible dans le rapport si celui-ci a pu être produit.
 
 ## Interprétation
 

@@ -16,6 +16,7 @@ from pathlib import Path
 from textwrap import dedent, indent
 from urllib.request import urlretrieve
 
+from applications import application_results
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
 
 
@@ -215,6 +216,7 @@ def main():
     parser.add_argument("--pypy", default="pypy3.11", help=f"Binaire PyPy ciblant Python {CPYTHON_VERSION}")
     parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
     parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
+    parser.add_argument("--applications", action="store_true", help="Mesurer Django, Bottle et NumPy dans un dossier temporaire")
     parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
     parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Dossier du site généré")
     args = parser.parse_args()
@@ -240,13 +242,14 @@ def main():
                 "runtimes": runtimes,
                 "common": comparisons(executables, directory),
                 "upstream": upstream_results(executables, tests, directory),
+                "applications": application_results(executables, directory, invoke) if args.applications else [],
             }
             generate(report, args.output)
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
         parser.exit(1, f"Mesure interrompue : {exc}\n")
 
     print(f"{len(report['common'])} cas communs · {len(report['upstream'])} tests amont · {args.output / 'index.html'}")
-    for suite in ("common", "upstream"):
+    for suite in ("common", "upstream", "applications"):
         for runtime in executables:
             outcomes = [row["outcomes"][runtime]["status"] for row in report[suite] if runtime in row["outcomes"]]
             if outcomes:

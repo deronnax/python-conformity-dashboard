@@ -12,7 +12,7 @@
     <header class="page-header">
       <div>
         <h1 data-message="title">Python Conformity</h1>
-        <p data-message="subtitle">Observed behavior of public standard library APIs.</p>
+        <p data-message="subtitle">Compare Python implementations by use case, application and standard library behavior.</p>
       </div>
       <div class="header-actions">
         <label class="language-control">
@@ -28,22 +28,38 @@
     <p class="metadata" id="metadata"></p>
 
     <section class="comparison" data-label="comparison" aria-label="Comparison results">
-      <div class="switch" role="group" data-label="suite" aria-label="Test suite">
-        <button type="button" data-suite="common" data-message="commonTab" aria-pressed="true">Shared cases</button>
-        <button type="button" data-suite="upstream" data-message="upstreamTab" aria-pressed="false">CPython tests</button>
+      <div class="switch" role="group" data-label="suite" aria-label="Dashboard view">
+        <button type="button" data-suite="uses" data-message="usesTab" aria-pressed="true" aria-controls="use-cases">Use cases</button>
+        <button type="button" data-suite="common" data-message="commonTab" aria-pressed="false" aria-controls="api-comparison">Shared cases</button>
+        <button type="button" data-suite="upstream" data-message="upstreamTab" aria-pressed="false" aria-controls="api-comparison">CPython tests</button>
       </div>
-      <p id="description" class="description"></p>
-      <div id="summaries" class="summaries" data-label="summaries" aria-label="Results by interpreter"></div>
-      <div class="filters">
-        <label><span data-message="module">Module</span> <select id="module"></select></label>
-        <label class="only-differences"><input type="checkbox" id="only-differences"> <span data-message="onlyDifferences">Differences and unmeasured cases</span></label>
-        <span id="count" role="status"></span>
+      <div id="use-cases">
+        <h2 data-message="usesTitle">Why choose a different Python?</h2>
+        <div id="use-case-list" class="use-case-grid"></div>
+        <h2 id="application-checks" data-message="appTitle">Application checks</h2>
+        <p class="description" data-message="appMethod"></p>
+        <p id="application-empty" data-message="appEmpty" hidden></p>
+        <div id="application-table" class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0" hidden>
+          <table>
+            <thead id="application-head"></thead>
+            <tbody id="application-body"></tbody>
+          </table>
+        </div>
       </div>
-      <div class="table-scroll" role="region" data-label="caseTable" aria-label="Test case table" tabindex="0">
-        <table>
-          <thead id="table-head"></thead>
-          <tbody id="table-body"></tbody>
-        </table>
+      <div id="api-comparison" hidden>
+        <p id="description" class="description"></p>
+        <div id="summaries" class="summaries" data-label="summaries" aria-label="Results by interpreter"></div>
+        <div class="filters">
+          <label><span data-message="module">Module</span> <select id="module"></select></label>
+          <label class="only-differences"><input type="checkbox" id="only-differences"> <span data-message="onlyDifferences">Differences and unmeasured cases</span></label>
+          <span id="count" role="status"></span>
+        </div>
+        <div class="table-scroll" role="region" data-label="caseTable" aria-label="Test case table" tabindex="0">
+          <table>
+            <thead id="table-head"></thead>
+            <tbody id="table-body"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
