@@ -44,6 +44,11 @@ NUMPY = {
         "numpy-2.4.4-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
         "9b2aec6af35c113b05695ebb5749a787acd63cafc83086a05771d1e1cd1e555f",
     ),
+    "freethreaded": Wheel(
+        PYPI + "5f/86/2acbda8cc2af5f3d7bfc791192863b9e3e19674da7b5e533fded124d1299/"
+        "numpy-2.4.4-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "b268594bccac7d7cf5844c7732e3f20c50921d94e36d7ec9b79e9857694b1b2f",
+    ),
     "graalpy": Wheel(
         "https://gds.oracle.com/download/graalpy-wheels/"
         "numpy-2.4.4-graalpy313-graalpy253_313_native-manylinux_2_27_x86_64.whl",

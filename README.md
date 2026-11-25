@@ -2,7 +2,7 @@
 
 [Dashboard public](https://deronnax.github.io/python-conformity/)
 
-Ce tableau de bord compare des comportements observables de la bibliothèque standard à CPython 3.11.17. Le corpus couvre 16 modules. Il comprend notamment des transactions SQLite, des flux zlib partiels, des groupes de tâches asynchrones, des transitions de fuseau horaire et des expressions régulières atomiques.
+Ce tableau de bord compare des comportements observables de la bibliothèque standard à CPython 3.11.17. Le corpus couvre 17 modules. Il comprend notamment des transactions SQLite, des threads qui ajoutent à une même liste, des flux zlib partiels, des groupes de tâches asynchrones, des transitions de fuseau horaire et des expressions régulières atomiques.
 
 ## Mesure locale
 
@@ -24,11 +24,19 @@ Le rendu des deux pages et des tableaux est réalisé en Python avec la biblioth
 
 `--packages` ajoute les 50 projets les plus téléchargés sur PyPI entre le 26 octobre et le 24 novembre 2026 en UTC, tous types de fichiers confondus. [Le classement et sa requête ClickPy](pypi-packages.json) fixent aussi la version et le module à importer pour chaque projet. `python3.11 update_ranking.py` régénère ce fichier. La version retenue est la dernière version stable non retirée dont les métadonnées acceptent Python 3.11 à la date de référence. Sur chaque interpréteur, pip installe cette version et ses dépendances depuis des wheels avec `--prefix` dans un dossier temporaire propre au test. Contrairement à `--target`, cette option laisse pip voir les paquets fournis avec l’interpréteur, comme cffi sur PyPy. Le test vérifie la version installée et l’import du module indiqué. Quand aucun wheel ne convient au paquet lui-même, le harnais consulte PyPI. Si la version publie des wheels pour le même tag d’interpréteur et la même plateforme mais une autre ABI, par exemple `pypy311_pp73` pour PyPy 8 qui exige `pypy311_pp80`, le résultat est « Autre ABI seulement » et non « Aucun wheel ».
 
-`--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://github.com/RustPython/RustPython/releases/tag/0.6.0). Pour les essais SQLite, compiler RustPython avec `cargo build --release --locked --features freeze-stdlib,sqlite --bin rustpython` et utiliser `target/release/rustpython`. `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
+`--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://github.com/RustPython/RustPython/releases/tag/0.6.0). Pour les essais SQLite, compiler RustPython avec `cargo build --release --locked --features freeze-stdlib,sqlite --bin rustpython` et utiliser `target/release/rustpython`. `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes. `--freethreaded /chemin/vers/python3.14t` ajoute un [CPython 3.14 sans GIL](https://github.com/astral-sh/python-build-standalone/releases/tag/20261021). Le script refuse un binaire qui n’est pas une version sans GIL.
+
+## Interpréteurs et threads
+
+Chaque exécution mesure `threads.py` sur chaque interpréteur : quatre threads exécutent la même fonction qui sature le processeur, et l’accélération compare leur durée à celle de quatre appels successifs. Environ ×1 signifie que les threads passent à tour de rôle (un verrou global). Une valeur proche de ×4 signifie qu’ils s’exécutent en parallèle. Le résultat dépend des cœurs de la machine, qui sont affichés. L’onglet **Interpréteurs** montre cette accélération, la version de Python visée, l’ABI des wheels et l’état du GIL quand l’interpréteur le communique (`sys._is_gil_enabled()`, à partir de Python 3.13).
+
+## Historique
+
+Chaque exécution ajoute un instantané compact (décomptes par état, interpréteur et vue) à `history.json`. GitHub Pages remplace tout le site à chaque déploiement : le workflow télécharge donc l’`history.json` publié, y ajoute son instantané et le republie. `--history chemin/history.json` fait de même en local. Un fichier absent ou illisible démarre un nouvel historique. L’onglet **Historique** trace une courbe par interpréteur, avec une vue en tableau des mêmes valeurs.
 
 ## GitHub Actions
 
-Le workflow **Conformité Python** s’exécute sur Linux x86-64 à chaque push sur `main`, chaque lundi et sur demande. Il lance d’abord les tests unitaires avec le CPython téléchargé. Il télécharge les binaires précompilés de CPython, PyPy et GraalPy Community 25.5.5 et vérifie leurs empreintes. Il vérifie aussi l’empreinte de l’archive source de RustPython 0.6.0, puis compile l’interpréteur avec la bibliothèque standard intégrée et le module natif `_sqlite3`.
+Le workflow **Conformité Python** s’exécute sur Linux x86-64 à chaque push sur `main`, chaque lundi et sur demande. Il lance d’abord les tests unitaires avec le CPython téléchargé. Il télécharge les binaires précompilés de CPython, CPython 3.14 sans GIL, PyPy et GraalPy Community 25.5.5 et vérifie leurs empreintes. Les empreintes de CPython proviennent du fichier `SHA256SUMS` de la publication. Il vérifie aussi l’empreinte de l’archive source de RustPython 0.6.0, puis compile l’interpréteur avec la bibliothèque standard intégrée et le module natif `_sqlite3`.
 
 Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décompresser l’archive puis ouvrir `index.html`. Le workflow active les essais applicatifs et les essais de paquets. Une incompatibilité observée est un résultat de mesure. Un échec de la référence CPython dans le corpus de la bibliothèque standard rend le job rouge et reste visible dans le rapport si celui-ci a pu être produit.
 

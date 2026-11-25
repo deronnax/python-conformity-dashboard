@@ -12,11 +12,13 @@ from string import Template
 from urllib.parse import quote
 
 from dashboard_content import TRANSLATIONS
+from history import dump as dump_history, load as load_history, merge, snapshot
 
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": "shared-cases", "upstream": "cpython-tests"}
+VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": "shared-cases",
+         "upstream": "cpython-tests", "interpreters": "interpreters", "history": "history"}
 OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
 
 
@@ -243,7 +245,155 @@ def render_packages(report, language, copy):
       </section>"""
 
 
-def render_page(report, language, template, assets):
+def render_interpreters(report, language, copy):
+    runtimes = report["runtimes"]
+    tags = (report.get("packages") or {}).get("tags") or {}
+    listing = []
+    for runtime in runtimes:
+        threads = runtime.get("threads") or {}
+        if "speedup" in threads:
+            gil = {True: "gilEnabled", False: "gilDisabled", None: "gilUnknown"}[threads.get("gil")]
+            detail = copy["threadsDetail"].format(workers=threads["workers"], cores=threads["cores"])
+            speedup = (
+                f'<progress max="{threads["workers"]}" value="{threads["speedup"]}" '
+                f'aria-label="{escape(copy["threadsSpeedup"])}"></progress>'
+                f'<span class="speedup"><strong>×{threads["speedup"]:g}</strong> · {escape(detail)}</span>'
+            )
+            gil_cell = escape(copy[gil])
+        elif threads:
+            gil_cell, speedup = escape(copy["gilUnknown"]), badge(threads, copy)
+        else:
+            gil_cell, speedup = escape(copy["gilUnknown"]), ""
+        build = runtime["version"].split()[0]
+        abi = tags.get(runtime["id"], {}).get("abi")
+        listing.append(
+            f'<tr><th scope="row"><span class="runtime-key series-{css_token(runtime["id"])}" aria-hidden="true"></span>'
+            f'{escape(runtime["name"])}</th><td>{escape(build)}</td>'
+            f'<td>{"<code>" + escape(abi) + "</code>" if abi else ""}</td><td>{gil_cell}</td><td class="speedup-cell">{speedup}</td></tr>'
+        )
+    labels = (copy["interpreter"], copy["pythonVersion"], copy["abi"], copy["gil"], copy["threadsSpeedup"])
+    head = "<thead><tr>" + "".join(f'<th scope="col">{escape(label)}</th>' for label in labels) + "</tr></thead>"
+    return f"""<section id="{VIEWS["interpreters"]}" data-dashboard-panel>
+        <h2>{escape(copy["interpretersTab"])}</h2>
+        <p class="description">{escape(copy["interpretersMethod"])}</p>
+        <div class="table-scroll" role="region" aria-label="{escape(copy["interpretersTab"])}" tabindex="0">
+          <table class="interpreter-table">
+            {head}
+            <tbody>{"".join(listing)}</tbody>
+          </table>
+        </div>
+      </section>"""
+
+
+def css_token(value):
+    return re.sub(r"[^a-z0-9-]", "", str(value).lower())
+
+
+def history_series(entries, chart):
+    """Return {runtime id: (name, [(timestamp, value, label)])} and the top of the scale."""
+    series = {}
+    top = 0
+    for entry in entries:
+        moment = entry["generatedAt"]
+        if chart == "threads":
+            points = {key: item for key, item in entry["runtimes"].items() if item.get("speedup") is not None}
+            top = max([top, *(item.get("workers") or 0 for item in points.values())])
+            for key, item in points.items():
+                label = f'×{item["speedup"]:g}'
+                series.setdefault(key, (item["name"], []))[1].append((moment, item["speedup"], label))
+        elif chart in entry["suites"]:
+            suite = entry["suites"][chart]
+            top = max(top, suite["total"])
+            for key, counts in suite["runtimes"].items():
+                passed = counts.get("passed", 0)
+                name = entry["runtimes"].get(key, {}).get("name", key)
+                series.setdefault(key, (name, []))[1].append((moment, passed, f'{passed} / {suite["total"]}'))
+    return series, top
+
+
+def chart_ticks(top, chart):
+    if chart == "threads":
+        return list(range(int(top) + 1))
+    return sorted({0, top // 2, top})
+
+
+def render_chart(entries, chart, copy):
+    series, top = history_series(entries, chart)
+    if not series or not top:
+        return ""
+    width, height, left, right, upper, lower = 640, 250, 44, 16, 14, 34
+    moments = sorted({moment for _, points in series.values() for moment, _, _ in points})
+    times = [datetime.fromisoformat(moment).timestamp() for moment in moments]
+    span = times[-1] - times[0]
+
+    def x(moment):
+        if not span:
+            return left + (width - left - right) / 2
+        return left + (datetime.fromisoformat(moment).timestamp() - times[0]) / span * (width - left - right)
+
+    def y(value):
+        return upper + (1 - value / top) * (height - upper - lower)
+
+    parts = []
+    for tick in chart_ticks(top, chart):
+        label = f"×{tick}" if chart == "threads" else str(tick)
+        parts.append(f'<line class="grid" x1="{left}" x2="{width - right}" y1="{y(tick):.1f}" y2="{y(tick):.1f}"/>'
+                     f'<text class="axis" x="{left - 8}" y="{y(tick) + 4:.1f}" text-anchor="end">{label}</text>')
+    shown = moments if len(moments) <= 4 else [moments[0], moments[len(moments) // 3], moments[2 * len(moments) // 3], moments[-1]]
+    for moment in shown:
+        anchor = "middle" if 0 < moments.index(moment) < len(moments) - 1 or len(moments) == 1 else (
+            "start" if moment == moments[0] else "end")
+        parts.append(f'<text class="axis" x="{x(moment):.1f}" y="{height - 10}" text-anchor="{anchor}">{escape(moment[:10])}</text>')
+    for key, (name, points) in series.items():
+        token = css_token(key)
+        if len(points) > 1:
+            path = " ".join(f"{x(moment):.1f},{y(value):.1f}" for moment, value, _ in points)
+            parts.append(f'<polyline class="line series-{token}" points="{path}"/>')
+        parts.extend(f'<circle class="marker series-{token}" cx="{x(moment):.1f}" cy="{y(value):.1f}" r="4"/>'
+                     for moment, value, _ in points)
+    band = max(24, (width - left - right) / max(len(moments), 1))
+    parts.append(f'<line class="crosshair" y1="{upper}" y2="{height - lower}" hidden/>')
+    for moment in moments:
+        readout = [[series[key][0], dict((m, label) for m, _, label in series[key][1])[moment], css_token(key)]
+                   for key in series if moment in {m for m, _, _ in series[key][1]}]
+        parts.append(
+            f'<rect class="hit" tabindex="0" x="{x(moment) - band / 2:.1f}" y="{upper}" width="{band:.1f}" '
+            f'height="{height - upper - lower}" data-x="{x(moment):.1f}" data-date="{escape(moment[:10])}" '
+            f'data-readout="{escape(json.dumps(readout, ensure_ascii=False))}"/>')
+    title = copy["historyCharts"][chart]
+    legend = "".join(f'<li><span class="key series-{css_token(key)}"></span>{escape(name)}</li>'
+                     for key, (name, _) in series.items())
+    columns = "".join(f'<th scope="col">{escape(name)}</th>' for name, _ in series.values())
+    body = []
+    for moment in moments:
+        cells = "".join(
+            f"<td>{escape(dict((m, label) for m, _, label in points).get(moment, ''))}</td>"
+            for _, points in series.values())
+        body.append(f'<tr><th scope="row">{escape(moment[:10])}</th>{cells}</tr>')
+    return f"""<figure class="chart" data-chart>
+          <figcaption>{escape(title)}</figcaption>
+          <ul class="legend">{legend}</ul>
+          <svg viewBox="0 0 {width} {height}" role="img" aria-label="{escape(title)}">{"".join(parts)}</svg>
+          <div class="tooltip" role="status" hidden></div>
+          <details class="chart-table"><summary>{escape(copy["historyTable"])}</summary>
+            <div class="table-scroll"><table><thead><tr><th scope="col">{escape(copy["historyDate"])}</th>{columns}</tr></thead>
+            <tbody>{"".join(body)}</tbody></table></div>
+          </details>
+        </figure>"""
+
+
+def render_history(entries, copy):
+    charts = "".join(render_chart(entries, chart, copy) for chart in ("packages", "applications", "common", "threads"))
+    first = f'<p class="description">{escape(copy["historyFirst"])}</p>' if len(entries) < 2 else ""
+    return f"""<section id="{VIEWS["history"]}" data-dashboard-panel>
+        <h2>{escape(copy["historyTab"])}</h2>
+        <p class="description">{escape(copy["historyIntro"])}</p>
+        {first}
+        <div class="charts">{charts}</div>
+      </section>"""
+
+
+def render_page(report, language, template, assets, history):
     copy = TRANSLATIONS[language]
     base = "../" if language == "fr" else ""
     french_page = "index.html" if language == "fr" else "fr/index.html"
@@ -263,6 +413,8 @@ def render_page(report, language, template, assets):
         referenceVersion=escape(report["reference"]),
         packages=render_packages(report, language, copy),
         applications=render_applications(report, language, copy),
+        interpreters=render_interpreters(report, language, copy),
+        history=render_history(history, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
         scriptVersion=hashlib.sha256(assets["dashboard.js"]).hexdigest()[:12],
@@ -270,14 +422,16 @@ def render_page(report, language, template, assets):
     )
 
 
-def generate(report, output):
+def generate(report, output, previous_history=()):
+    history = merge(list(previous_history), snapshot(report))
     french = output / "fr"
     french.mkdir(parents=True, exist_ok=True)
     template = Template((ASSETS / "index.html").read_text(encoding="utf-8"))
     assets = {name: (ASSETS / name).read_bytes() for name in ("dashboard.js", "styles.css")}
     for directory, language in ((output, "en"), (french, "fr")):
-        (directory / "index.html").write_text(render_page(report, language, template, assets), encoding="utf-8")
+        (directory / "index.html").write_text(render_page(report, language, template, assets, history), encoding="utf-8")
     (output / "results.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (output / "history.json").write_text(dump_history(history), encoding="utf-8")
     (output / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
     for name, contents in assets.items():
         (output / name).write_bytes(contents)
@@ -287,8 +441,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
+    parser.add_argument("--history", type=Path, help="history.json from an earlier run, extended with this report")
     arguments = parser.parse_args()
-    generate(json.loads(arguments.report.read_text(encoding="utf-8")), arguments.output)
+    previous = load_history(arguments.history) if arguments.history else []
+    generate(json.loads(arguments.report.read_text(encoding="utf-8")), arguments.output, previous)
 
 
 if __name__ == "__main__":

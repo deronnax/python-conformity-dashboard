@@ -19,6 +19,7 @@ from urllib.request import urlretrieve
 from applications import application_results
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
 from dashboard import generate
+from history import load as load_history
 from package_bench import package_results
 
 
@@ -26,22 +27,27 @@ ROOT = Path(__file__).resolve().parent
 ARCHIVE = f"Python-{CPYTHON_VERSION}.tar.xz"
 ARCHIVE_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/{ARCHIVE}"
 ARCHIVE_SHA256 = "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
-RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython"}
+RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
+                 "freethreaded": "CPython 3.14t"}
+# sys.implementation.name reported by each runtime id.
+IMPLEMENTATIONS = {"freethreaded": "cpython"}
 
 
-def run(executable, *args, cwd):
+def run(executable, *args, cwd, timeout=30):
     env = {key: value for key, value in os.environ.items() if not key.startswith(("PYTHON", "RUSTPYTHON"))}
-    return subprocess.run([executable, "-I", "-S", "-B", *args], cwd=cwd, env=env, timeout=30,
+    return subprocess.run([executable, "-I", "-S", "-B", *args], cwd=cwd, env=env, timeout=timeout,
                           capture_output=True, encoding="utf-8", errors="replace")
 
 
 def identify(executable, runtime, cwd):
     info = run(executable, "-c", "import sys; print(sys.implementation.name); print(sys.version)", cwd=cwd)
     name, _, version = info.stdout.strip().partition("\n")
-    if info.returncode or name != runtime or not version:
+    if info.returncode or name != IMPLEMENTATIONS.get(runtime, runtime) or not version:
         raise ValueError(f"{executable} ne correspond pas à {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
     if runtime in ("cpython", "pypy") and version.split()[0] != CPYTHON_VERSION:
         raise ValueError(f"{RUNTIME_NAMES[runtime]} doit cibler Python {CPYTHON_VERSION}, reçu {version.split()[0]}.")
+    if runtime == "freethreaded" and "free-threading build" not in version:
+        raise ValueError(f"{executable} n’est pas une version CPython sans GIL.")
     return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version}
 
 
@@ -77,11 +83,12 @@ def result(status, detail="", *, detail_fr=None):
     return outcome
 
 
-def invoke(executable, *args, cwd):
+def invoke(executable, *args, cwd, timeout=30):
     try:
-        completed = run(executable, *args, cwd=cwd)
+        completed = run(executable, *args, cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return result("timeout", "The process exceeded 30 seconds.", detail_fr="Le processus a dépassé 30 secondes.")
+        return result("timeout", f"The process exceeded {timeout} seconds.",
+                      detail_fr=f"Le processus a dépassé {timeout} secondes.")
     except OSError as exc:
         return result("blocked", str(exc))
     if completed.returncode:
@@ -180,6 +187,18 @@ def comparisons(executables, cwd):
     return rows
 
 
+def thread_results(executables, cwd):
+    """Measure CPU-bound thread scaling. A failed measurement keeps its status instead of a speedup."""
+    measured = {}
+    for runtime, executable in executables.items():
+        observation = invoke(executable, str(ROOT / "threads.py"), cwd=cwd, timeout=120)
+        try:
+            measured[runtime] = observation if isinstance(observation, dict) else json.loads(observation)
+        except ValueError:
+            measured[runtime] = result("blocked", observation)
+    return measured
+
+
 def upstream_results(executables, tests, cwd):
     rows = []
     for module, methods in UPSTREAM.items():
@@ -207,6 +226,8 @@ def main():
     parser.add_argument("--pypy", default="pypy3.11", help=f"Binaire PyPy ciblant Python {CPYTHON_VERSION}")
     parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
     parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
+    parser.add_argument("--freethreaded", help="Binaire CPython 3.14 sans GIL. Ajouté au corpus commun si fourni.")
+    parser.add_argument("--history", type=Path, help="history.json d’une exécution précédente, complété par celle-ci")
     parser.add_argument("--applications", action="store_true", help="Mesurer Django, Bottle et NumPy dans un dossier temporaire")
     parser.add_argument("--packages", action="store_true", help="Tester l’installation et l’import des 50 paquets PyPy sélectionnés")
     parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
@@ -226,6 +247,8 @@ def main():
         with tempfile.TemporaryDirectory(prefix="python-conformity-") as temp:
             directory = Path(temp)
             runtimes = [identify(path, runtime, directory) for runtime, path in executables.items()]
+            for runtime, threads in thread_results(executables, directory).items():
+                next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
             tests = extract_tests(args.source, directory)
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -237,7 +260,7 @@ def main():
                 "applications": application_results(executables, directory, invoke) if args.applications else [],
                 "packages": package_results(executables, directory) if args.packages else None,
             }
-            generate(report, args.output)
+            generate(report, args.output, load_history(args.history) if args.history else [])
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
         parser.exit(1, f"Mesure interrompue : {exc}\n")
 
