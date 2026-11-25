@@ -1,5 +1,7 @@
 # Conformité Python
 
+[Dashboard public](https://deronnax.github.io/python-conformity/)
+
 Ce tableau de bord compare des comportements observables de la bibliothèque standard à CPython 3.11.17. Le corpus couvre 16 modules. Il comprend notamment des transactions SQLite, des flux zlib partiels, des groupes de tâches asynchrones, des transitions de fuseau horaire et des expressions régulières atomiques.
 
 ## Mesure locale
@@ -33,3 +35,7 @@ Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décom
 - **Cas communs**. Le même appel est exécuté sur tous les interpréteurs sélectionnés. On compare le type et la valeur ou, pour les entrées invalides, la possibilité d’intercepter l’exception avec sa classe publique. Une API absente, un écart de comportement, un délai dépassé et un blocage de la mesure ont des états distincts.
 - **Tests CPython**. Les corps des tests sélectionnés tournent sur CPython et PyPy avec les bibliothèques standard de chaque binaire. Une garde dans le harnais JSON permet de charger les méthodes sélectionnées quand l’accélérateur CPython `_json` est absent. Les tests d’optimisations internes et de l’API C sont hors corpus. [Sources CPython v3.11.17](https://github.com/python/cpython/tree/v3.11.17/Lib/test)
 - **Périmètre**. Les cas communs portent sur des API publiques de CPython 3.11 et s’appliquent aux binaires et plateformes affichés. GraalPy cible Python 3.13. Le binaire RustPython 0.6.0 annonce Python 3.14 alpha. La présence de modules optionnels dépend de la configuration de chaque binaire. [GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5) · [RustPython](https://rustpython.github.io/docs/getting_started/installation.html)
+
+## Licence
+
+Le code du dashboard, les scénarios de mesure et les scripts sont distribués sous [licence MIT](LICENSE). Les interpréteurs, la suite de tests CPython et les paquets téléchargés pendant les mesures sont distribués par leurs projets respectifs sous leurs propres licences.
