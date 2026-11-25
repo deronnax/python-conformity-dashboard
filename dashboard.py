@@ -558,7 +558,22 @@ def render_history(entries, copy):
       </section>"""
 
 
-def render_page(report, language, template, assets, history):
+def render_versions(site, language, copy):
+    """Links between the dashboards of each measured Python version, same language."""
+    if not site or len(site["versions"]) < 2:
+        return ""
+    folder = "fr/" if language == "fr" else ""
+    current = dict(site["versions"])[site["current"]]
+    up = "../" * (current + folder).count("/")
+    links = []
+    for minor, prefix in site["versions"]:
+        selected = ' aria-current="page"' if minor == site["current"] else ""
+        links.append(f'<a href="{up}{prefix}{folder}index.html" data-version-link{selected}>Python {escape(minor)}</a>')
+    return (f'<nav class="switch version-switch" aria-label="{escape(copy["pythonVersions"])}">'
+            f'{"".join(links)}</nav><p class="description">{escape(copy["pythonVersionsIntro"])}</p>')
+
+
+def render_page(report, language, template, assets, history, site=None):
     copy = TRANSLATIONS[language]
     base = "../" if language == "fr" else ""
     french_page = "index.html" if language == "fr" else "fr/index.html"
@@ -581,6 +596,7 @@ def render_page(report, language, template, assets, history):
         interpreters=render_interpreters(report, language, copy),
         performance=render_benchmarks(report, language, copy),
         history=render_history(history, copy),
+        versions=render_versions(site, language, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
         scriptVersion=hashlib.sha256(assets["dashboard.js"]).hexdigest()[:12],
@@ -588,14 +604,14 @@ def render_page(report, language, template, assets, history):
     )
 
 
-def generate(report, output, previous_history=()):
+def generate(report, output, previous_history=(), site=None):
     history = merge(list(previous_history), snapshot(report))
     french = output / "fr"
     french.mkdir(parents=True, exist_ok=True)
     template = Template((ASSETS / "index.html").read_text(encoding="utf-8"))
     assets = {name: (ASSETS / name).read_bytes() for name in ("dashboard.js", "styles.css")}
     for directory, language in ((output, "en"), (french, "fr")):
-        (directory / "index.html").write_text(render_page(report, language, template, assets, history), encoding="utf-8")
+        (directory / "index.html").write_text(render_page(report, language, template, assets, history, site), encoding="utf-8")
     (output / "results.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     (output / "history.json").write_text(dump_history(history), encoding="utf-8")
     (output / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())

@@ -173,6 +173,29 @@ class ContractAndVersionTests(unittest.TestCase):
         self.assertNotIn("data-contract-filter", pages["en"])
 
 
+class VersionSwitchTests(unittest.TestCase):
+    def render(self, current):
+        site = {"current": current, "versions": [("3.12", ""), ("3.11", "3.11/")]}
+        with TemporaryDirectory() as directory:
+            generate(report(), Path(directory), (), site=site)
+            return {language: (Path(directory) / path).read_text(encoding="utf-8")
+                    for language, path in (("en", "index.html"), ("fr", "fr/index.html"))}
+
+    def test_links_reach_the_same_language_of_every_version(self):
+        root = self.render("3.12")
+        self.assertIn('href="index.html" data-version-link aria-current="page">Python 3.12', root["en"])
+        self.assertIn('href="3.11/index.html" data-version-link>Python 3.11', root["en"])
+        self.assertIn('href="../3.11/fr/index.html" data-version-link>Python 3.11', root["fr"])
+        nested = self.render("3.11")
+        self.assertIn('href="../index.html" data-version-link>Python 3.12', nested["en"])
+        self.assertIn('href="../../fr/index.html" data-version-link>Python 3.12', nested["fr"])
+        self.assertIn('href="../3.11/index.html" data-version-link aria-current="page">Python 3.11', nested["en"])
+
+    def test_a_single_version_has_no_switch(self):
+        pages, _ = render(report())
+        self.assertNotIn("data-version-link", pages["en"])
+
+
 class InterpreterTests(unittest.TestCase):
     def test_shows_thread_scaling_and_failed_measurements(self):
         pages, _ = render(report())

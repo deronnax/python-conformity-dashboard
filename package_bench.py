@@ -15,7 +15,6 @@ from applications import PYPI, Wheel, prepare
 
 
 ROOT = Path(__file__).resolve().parent
-RANKING = ROOT / "pypi-packages.json"
 PIP = Wheel(
     PYPI + "5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl",
     "382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab",
@@ -238,8 +237,8 @@ def wheel_tag(executable, root, pip):
         return None
 
 
-def package_results(executables, directory):
-    ranking = json.loads(RANKING.read_text(encoding="utf-8"))
+def package_results(executables, directory, ranking_path):
+    ranking = json.loads(Path(ranking_path).read_text(encoding="utf-8"))
     root = directory / "package-bench"
     root.mkdir()
     try:

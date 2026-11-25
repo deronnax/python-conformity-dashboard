@@ -108,7 +108,8 @@ function initializeDashboard() {
     }
   }
 
-  for (const link of languageLinks) {
+  // Switching language or Python version keeps the view and the filters.
+  for (const link of [...languageLinks, ...document.querySelectorAll("[data-version-link]")]) {
     link.addEventListener("click", (event) => {
       if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();

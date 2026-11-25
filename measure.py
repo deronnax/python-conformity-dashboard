@@ -18,17 +18,15 @@ from urllib.request import urlretrieve
 
 from applications import application_results
 from benchmarks import BENCHMARKS
-from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
+from corpus import PROBES, UPSTREAM, source_url
 from dashboard import generate
 from history import load as load_history
 from package_bench import package_results
 from performance import summarize
+from references import DEFAULT, REFERENCES
 
 
 ROOT = Path(__file__).resolve().parent
-ARCHIVE = f"Python-{CPYTHON_VERSION}.tar.xz"
-ARCHIVE_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/{ARCHIVE}"
-ARCHIVE_SHA256 = "c2c4321961fab0fb999d66e0cecf521c2ab3994c7992873ea99e306c1094fd5a"
 RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
                  "freethreaded": "CPython 3.14t"}
 # Measured for speed and thread scaling only: RustPython has no C API, so it cannot
@@ -63,12 +61,12 @@ print(json.dumps({"implementation": sys.implementation.name,
 """
 
 
-def language_mismatch(language, reference=CPYTHON_VERSION):
+def language_mismatch(language, reference):
     """True when an interpreter implements another minor version than the reference."""
     return language.split(".")[:2] != reference.split(".")[:2]
 
 
-def identify(executable, runtime, cwd):
+def identify(executable, runtime, cwd, reference):
     info = run(executable, "-c", DESCRIBE, cwd=cwd)
     try:
         described = json.loads(info.stdout)
@@ -77,27 +75,28 @@ def identify(executable, runtime, cwd):
     name, version = described.get("implementation"), described.get("version")
     if info.returncode or name != IMPLEMENTATIONS.get(runtime, runtime) or not version:
         raise ValueError(f"{executable} is not {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
-    if runtime in ("cpython", "pypy") and version.split()[0] != CPYTHON_VERSION:
-        raise ValueError(f"{RUNTIME_NAMES[runtime]} must target Python {CPYTHON_VERSION}, got {version.split()[0]}.")
-    if runtime == "graalpy" and version.split()[0].rpartition(".")[0] != CPYTHON_VERSION.rpartition(".")[0]:
-        raise ValueError(f"GraalPy must target Python {CPYTHON_VERSION.rpartition('.')[0]}, got {version.split()[0]}.")
+    language = described["language"]
+    if runtime in ("cpython", "pypy") and language != reference.cpython:
+        raise ValueError(f"{RUNTIME_NAMES[runtime]} must target Python {reference.cpython}, got {language}.")
+    if runtime == "graalpy" and language_mismatch(language, reference.cpython):
+        raise ValueError(f"GraalPy must target Python {reference.minor}, got {language}.")
     if runtime == "freethreaded" and "free-threading build" not in version:
         raise ValueError(f"{executable} is not a free-threaded CPython build.")
     return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version,
             "implementation": name, "implementationVersion": described["implementationVersion"],
             "language": described["language"], "cacheTag": described.get("cacheTag"),
-            "crossVersion": language_mismatch(described["language"])}
+            "crossVersion": language_mismatch(language, reference.cpython)}
 
 
-def extract_tests(archive, directory):
+def extract_tests(archive, directory, reference):
     if not archive:
-        archive = directory / ARCHIVE
-        urlretrieve(ARCHIVE_URL, archive)
+        archive = directory / reference.archive
+        urlretrieve(reference.archive_url, archive)
     with archive.open("rb") as stream:
         actual = hashlib.file_digest(stream, "sha256").hexdigest()
-    if actual != ARCHIVE_SHA256:
+    if actual != reference.archive_sha256:
         raise ValueError(f"The digest of {archive} does not match the official archive.")
-    test_path = f"Python-{CPYTHON_VERSION}/Lib/test"
+    test_path = f"Python-{reference.cpython}/Lib/test"
     with tarfile.open(archive) as source:
         members = [item for item in source.getmembers() if item.name.startswith(test_path + "/")]
         source.extractall(directory, members, filter="data")
@@ -214,7 +213,7 @@ def french_observation(observation):
     return observation
 
 
-def comparisons(executables, cwd, lib=None):
+def comparisons(executables, cwd, lib=None, reference=REFERENCES[DEFAULT]):
     rows = []
     for probe in PROBES:
         baseline = observe(executables["cpython"], probe, cwd)
@@ -235,8 +234,8 @@ def comparisons(executables, cwd, lib=None):
         snippet = "\n".join(part for part in (dedent(probe.setup).strip(), probe.expression) if part)
         snippet = snippet.replace("api(", probe.api + "(").replace("module.", probe.module + ".")
         rows.append({"id": probe.id, "module": probe.module, "api": probe.api, "title": probe.title,
-                     "titleFr": probe.title_fr, "contract": probe.contract, "contractSource": probe.contract_source,
-                     "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream, lib),
+                     "titleFr": probe.title_fr, "contract": probe.contract, "contractSource": probe.contract_source(reference),
+                     "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream, lib, reference),
                      "sourceTest": probe.upstream, "outcomes": outcomes})
     return rows
 
@@ -282,7 +281,7 @@ def benchmark_results(executables, cwd):
     return rows
 
 
-def upstream_results(executables, tests, cwd):
+def upstream_results(executables, tests, cwd, reference=REFERENCES[DEFAULT]):
     """Run the selected CPython test methods on the interpreters that target the same Python version."""
     runtimes = [runtime for runtime in UPSTREAM_RUNTIMES if runtime in executables]
     rows = []
@@ -302,24 +301,36 @@ def upstream_results(executables, tests, cwd):
                     outcomes[runtime] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
                                                detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
-                         "source": source_url(method, tests.parent), "sourceTest": method, "outcomes": outcomes})
+                         "source": source_url(method, tests.parent, reference), "sourceTest": method, "outcomes": outcomes})
     return rows
+
+
+def site_layout(reference):
+    """Where each version's dashboard lives: the default version at the root, the others in a folder."""
+    return {"current": reference.minor,
+            "versions": [(minor, "" if minor == DEFAULT else f"{minor}/") for minor in REFERENCES]}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cpython", default=sys.executable, help=f"Reference binary, Python {CPYTHON_VERSION}")
-    parser.add_argument("--pypy", default="pypy3.12", help=f"PyPy binary targeting Python {CPYTHON_VERSION}")
+    parser.add_argument("--reference", choices=REFERENCES, default=DEFAULT,
+                        help="Python version to measure. Every interpreter must implement it, except the "
+                             "free-threaded build and RustPython")
+    parser.add_argument("--cpython", default=sys.executable, help="Reference CPython binary of that version")
+    parser.add_argument("--pypy", help="PyPy binary implementing that version")
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
     parser.add_argument("--rustpython", help="RustPython binary. Measured for performance and threads only.")
     parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
-    parser.add_argument("--history", type=Path, help="history.json from an earlier run, extended by this one")
+    parser.add_argument("--history", type=Path, action="append", default=[],
+                        help="history.json from an earlier run, extended by this one. Repeatable: only "
+                             "entries measured against the same Python version are kept")
     parser.add_argument("--benchmarks", action="store_true", help="Time compute kernels and standard library workloads")
     parser.add_argument("--applications", action="store_true", help="Run Django, Bottle and NumPy scenarios in a temporary directory")
     parser.add_argument("--packages", action="store_true", help="Install and import the 50 most downloaded PyPI projects")
-    parser.add_argument("--source", type=Path, help=f"Official {ARCHIVE} archive, downloaded when omitted")
+    parser.add_argument("--source", type=Path, help="Official CPython source archive of that version, downloaded when omitted")
     parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Directory of the generated site")
     args = parser.parse_args()
+    reference = REFERENCES[args.reference]
 
     try:
         executables = {}
@@ -333,24 +344,26 @@ def main():
 
         with tempfile.TemporaryDirectory(prefix="python-conformity-") as temp:
             directory = Path(temp)
-            runtimes = [identify(path, runtime, directory) for runtime, path in executables.items()]
+            runtimes = [identify(path, runtime, directory, reference) for runtime, path in executables.items()]
             for runtime, threads in thread_results(executables, directory).items():
                 next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
             benchmarks = benchmark_results(executables, directory) if args.benchmarks else []
-            tests = extract_tests(args.source, directory)
+            tests = extract_tests(args.source, directory, reference)
             conformity = {runtime: path for runtime, path in executables.items() if runtime not in PERFORMANCE_ONLY}
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
-                "reference": CPYTHON_VERSION,
+                "reference": reference.cpython,
                 "runtimes": runtimes,
-                "common": comparisons(conformity, directory, tests.parent),
-                "upstream": upstream_results(conformity, tests, directory),
+                "common": comparisons(conformity, directory, tests.parent, reference),
+                "upstream": upstream_results(conformity, tests, directory, reference),
                 "benchmarks": benchmarks,
-                "applications": application_results(conformity, directory, invoke) if args.applications else [],
-                "packages": package_results(conformity, directory) if args.packages else None,
+                "applications": application_results(conformity, directory, invoke, reference.numpy) if args.applications else [],
+                "packages": package_results(conformity, directory, reference.ranking) if args.packages else None,
             }
-            generate(report, args.output, load_history(args.history) if args.history else [])
+            previous = [entry for path in args.history for entry in load_history(path)
+                        if not language_mismatch(entry.get("reference", ""), reference.cpython)]
+            generate(report, args.output, previous, site=site_layout(reference))
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
         parser.exit(1, f"Measurement aborted: {exc}\n")
 

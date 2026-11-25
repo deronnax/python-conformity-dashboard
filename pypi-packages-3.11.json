@@ -1,0 +1,308 @@
+{
+  "start": "2026-10-26",
+  "end": "2026-11-25",
+  "source": "https://github.com/ClickHouse/clickpy",
+  "query": "SELECT project, sum(count) AS downloads\nFROM pypi.pypi_downloads_per_day\nPREWHERE project IN (SELECT project FROM pypi.pypi_downloads ORDER BY count DESC LIMIT 5000)\nWHERE date >= '2026-10-26' AND date < '2026-11-25'\nGROUP BY project\nORDER BY downloads DESC, project\nLIMIT 50 FORMAT JSONEachRow",
+  "items": [
+    {
+      "project": "boto3",
+      "downloads": 2528068267,
+      "version": "1.44.11",
+      "module": "boto3"
+    },
+    {
+      "project": "packaging",
+      "downloads": 1938124463,
+      "version": "26.4",
+      "module": "packaging"
+    },
+    {
+      "project": "typing-extensions",
+      "downloads": 1834504593,
+      "version": "4.16.0",
+      "module": "typing_extensions"
+    },
+    {
+      "project": "certifi",
+      "downloads": 1759474898,
+      "version": "2026.11.20",
+      "module": "certifi"
+    },
+    {
+      "project": "idna",
+      "downloads": 1735381889,
+      "version": "3.20",
+      "module": "idna"
+    },
+    {
+      "project": "urllib3",
+      "downloads": 1635103842,
+      "version": "2.8.0",
+      "module": "urllib3"
+    },
+    {
+      "project": "charset-normalizer",
+      "downloads": 1549274253,
+      "version": "3.5.3",
+      "module": "charset_normalizer"
+    },
+    {
+      "project": "requests",
+      "downloads": 1523324194,
+      "version": "2.34.2",
+      "module": "requests"
+    },
+    {
+      "project": "cryptography",
+      "downloads": 1393642902,
+      "version": "50.0.2",
+      "module": "cryptography.hazmat.bindings._rust"
+    },
+    {
+      "project": "pluggy",
+      "downloads": 1340941898,
+      "version": "1.7.0",
+      "module": "pluggy"
+    },
+    {
+      "project": "pyyaml",
+      "downloads": 1315730476,
+      "version": "6.0.4",
+      "module": "yaml"
+    },
+    {
+      "project": "cffi",
+      "downloads": 1303503069,
+      "version": "2.1.1",
+      "module": "cffi"
+    },
+    {
+      "project": "python-dateutil",
+      "downloads": 1262006061,
+      "version": "4.0.0",
+      "module": "dateutil"
+    },
+    {
+      "project": "pycparser",
+      "downloads": 1236450446,
+      "version": "3.12",
+      "module": "pycparser"
+    },
+    {
+      "project": "pygments",
+      "downloads": 1213951140,
+      "version": "2.21.0",
+      "module": "pygments"
+    },
+    {
+      "project": "pydantic",
+      "downloads": 1206619267,
+      "version": "2.14.4",
+      "module": "pydantic"
+    },
+    {
+      "project": "pydantic-core",
+      "downloads": 1186040480,
+      "version": "2.50.5",
+      "module": "pydantic_core"
+    },
+    {
+      "project": "click",
+      "downloads": 1157577801,
+      "version": "8.5.1",
+      "module": "click"
+    },
+    {
+      "project": "numpy",
+      "downloads": 1151605481,
+      "version": "2.4.6",
+      "module": "numpy"
+    },
+    {
+      "project": "setuptools",
+      "downloads": 1138641715,
+      "version": "84.2.1",
+      "module": "setuptools"
+    },
+    {
+      "project": "anyio",
+      "downloads": 1095061600,
+      "version": "4.16.0",
+      "module": "anyio"
+    },
+    {
+      "project": "annotated-types",
+      "downloads": 1048672747,
+      "version": "0.8.0",
+      "module": "annotated_types"
+    },
+    {
+      "project": "typing-inspection",
+      "downloads": 1047971317,
+      "version": "0.4.5",
+      "module": "typing_inspection"
+    },
+    {
+      "project": "botocore",
+      "downloads": 1047131080,
+      "version": "1.44.11",
+      "module": "botocore"
+    },
+    {
+      "project": "six",
+      "downloads": 1040276068,
+      "version": "1.17.0",
+      "module": "six"
+    },
+    {
+      "project": "pytest",
+      "downloads": 1011058238,
+      "version": "9.2.0",
+      "module": "pytest"
+    },
+    {
+      "project": "h11",
+      "downloads": 1006638992,
+      "version": "0.16.0",
+      "module": "h11"
+    },
+    {
+      "project": "iniconfig",
+      "downloads": 986257188,
+      "version": "2.3.1",
+      "module": "iniconfig"
+    },
+    {
+      "project": "attrs",
+      "downloads": 935156011,
+      "version": "26.1.0",
+      "module": "attrs"
+    },
+    {
+      "project": "markupsafe",
+      "downloads": 875779134,
+      "version": "3.0.4",
+      "module": "markupsafe"
+    },
+    {
+      "project": "httpx",
+      "downloads": 831004792,
+      "version": "0.28.1",
+      "module": "httpx"
+    },
+    {
+      "project": "httpcore",
+      "downloads": 827634033,
+      "version": "1.0.9",
+      "module": "httpcore"
+    },
+    {
+      "project": "protobuf",
+      "downloads": 801983647,
+      "version": "7.36.2",
+      "module": "google.protobuf"
+    },
+    {
+      "project": "pyjwt",
+      "downloads": 776743895,
+      "version": "2.15.1",
+      "module": "jwt"
+    },
+    {
+      "project": "python-dotenv",
+      "downloads": 772634784,
+      "version": "1.2.4",
+      "module": "dotenv"
+    },
+    {
+      "project": "tzdata",
+      "downloads": 764257164,
+      "version": "2026.6",
+      "module": "tzdata"
+    },
+    {
+      "project": "s3transfer",
+      "downloads": 760523487,
+      "version": "0.19.3",
+      "module": "s3transfer"
+    },
+    {
+      "project": "opentelemetry-api",
+      "downloads": 742195252,
+      "version": "1.45.2",
+      "module": "opentelemetry.trace"
+    },
+    {
+      "project": "jinja2",
+      "downloads": 730547904,
+      "version": "3.1.6",
+      "module": "jinja2"
+    },
+    {
+      "project": "starlette",
+      "downloads": 725066633,
+      "version": "1.10.0",
+      "module": "starlette"
+    },
+    {
+      "project": "pillow",
+      "downloads": 724986905,
+      "version": "13.0.0",
+      "module": "PIL.Image"
+    },
+    {
+      "project": "pandas",
+      "downloads": 723801756,
+      "version": "3.1.1",
+      "module": "pandas"
+    },
+    {
+      "project": "uvicorn",
+      "downloads": 694809014,
+      "version": "0.54.0",
+      "module": "uvicorn"
+    },
+    {
+      "project": "rpds-py",
+      "downloads": 687808420,
+      "version": "2026.9.1",
+      "module": "rpds"
+    },
+    {
+      "project": "jsonschema",
+      "downloads": 676944993,
+      "version": "4.26.0",
+      "module": "jsonschema"
+    },
+    {
+      "project": "platformdirs",
+      "downloads": 675007506,
+      "version": "4.14.8",
+      "module": "platformdirs"
+    },
+    {
+      "project": "pathspec",
+      "downloads": 652406147,
+      "version": "1.1.1",
+      "module": "pathspec"
+    },
+    {
+      "project": "referencing",
+      "downloads": 646704055,
+      "version": "0.37.0",
+      "module": "referencing"
+    },
+    {
+      "project": "jsonschema-specifications",
+      "downloads": 643129928,
+      "version": "2025.9.1",
+      "module": "jsonschema_specifications"
+    },
+    {
+      "project": "filelock",
+      "downloads": 635569166,
+      "version": "4.3.1",
+      "module": "filelock"
+    }
+  ]
+}

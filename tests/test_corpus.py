@@ -6,6 +6,7 @@ from unittest import mock
 
 import corpus
 import measure
+from references import DEFAULT, REFERENCES
 
 
 class ContractTests(unittest.TestCase):
@@ -18,8 +19,10 @@ class ContractTests(unittest.TestCase):
         for probe in corpus.PROBES:
             if probe.contract == "stdlib_spec":
                 with self.subTest(probe=probe.id):
-                    self.assertTrue(probe.contract_source.startswith("https://docs.python.org/3.12/library/"))
-                    self.assertIn("#", probe.contract_source)
+                    for minor, reference in REFERENCES.items():
+                        url = probe.contract_source(reference)
+                        self.assertTrue(url.startswith(f"https://docs.python.org/{minor}/library/"))
+                        self.assertIn("#", url)
 
     def test_the_classification_names_only_existing_cases(self):
         self.assertEqual(set(corpus.CONTRACTS) - {probe.id for probe in corpus.PROBES}, set())
@@ -42,7 +45,9 @@ class SourceLinkTests(unittest.TestCase):
                               "class Child(Base):\n    pass\n", encoding="utf-8")
             url = corpus.source_url("test.test_demo.Child.test_one", lib)
             self.assertTrue(url.endswith("/Lib/test/test_demo.py#L2"))
-            self.assertIn(f"/v{corpus.CPYTHON_VERSION}/", url)
+            self.assertIn(f"/v{REFERENCES[DEFAULT].cpython}/", url)
+            older = corpus.source_url("test.test_demo.Child.test_one", lib, REFERENCES["3.11"])
+            self.assertIn("/v3.11.17/", older)
             self.assertFalse(corpus.source_url("test.test_demo.Child.test_missing", lib).endswith("#L2"))
 
     def test_links_fall_back_to_the_file_without_sources(self):
@@ -75,8 +80,25 @@ class FailureClassificationTests(unittest.TestCase):
 class VersionTests(unittest.TestCase):
     def test_only_another_minor_version_is_a_cross_version_comparison(self):
         self.assertFalse(measure.language_mismatch("3.12.8", "3.12.15"))
+        self.assertFalse(measure.language_mismatch("3.11.7", "3.11.17"))
         self.assertTrue(measure.language_mismatch("3.14.9", "3.12.15"))
         self.assertTrue(measure.language_mismatch("3.14.0a0", "3.12.15"))
+
+
+
+class ReferenceTests(unittest.TestCase):
+    def test_each_version_has_its_ranking_and_archive(self):
+        for minor, reference in REFERENCES.items():
+            with self.subTest(version=minor):
+                self.assertEqual(reference.minor, minor)
+                self.assertTrue(reference.ranking.is_file())
+                self.assertIn(f"/{reference.cpython}/Python-{reference.cpython}.tar.xz", reference.archive_url)
+                self.assertIn("cpython", reference.numpy)
+
+    def test_the_default_version_is_at_the_root(self):
+        layout = measure.site_layout(REFERENCES["3.11"])
+        self.assertEqual(layout["current"], "3.11")
+        self.assertEqual(dict(layout["versions"]), {"3.12": "", "3.11": "3.11/"})
 
 
 if __name__ == "__main__":
