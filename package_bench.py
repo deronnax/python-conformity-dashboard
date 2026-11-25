@@ -127,8 +127,8 @@ def platform_family(platform):
 def foreign_abis(filenames, tag):
     """Return the ABIs of wheels built for this interpreter tag and platform but another ABI.
 
-    A PyPy 3.11 wheel tagged pp311-pypy311_pp73 matches a PyPy 8 interpreter
-    (pp311, pypy311_pp80) except for its ABI. A pp310 wheel targets another
+    A PyPy 3.12 wheel tagged pp312-pypy312_pp73 matches a PyPy 8 interpreter
+    (pp312, pypy312_pp80) except for its ABI. A pp310 wheel targets another
     Python version and does not count.
     """
     system, machine = platform_family(tag["platform"])

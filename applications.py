@@ -33,26 +33,19 @@ BOTTLE = (
     Wheel(PYPI + "83/f6/b55ec74cfe68c6584163faa311503c20b0da4c09883a41e8e00d6726c954/bottle-0.13.4-py2.py3-none-any.whl",
           "045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e"),
 )
+# PyPI publishes NumPy 2.4.4 for PyPy 3.11 only, and Oracle publishes GraalPy wheels
+# for the 25.0 ABI on Python 3.12, not for the 25.2 release tested here. An
+# interpreter without an entry has no pinned wheel and reports "No wheel".
 NUMPY = {
     "cpython": Wheel(
-        PYPI + "cf/c5/9fcb7e0e69cef59cf10c746b84f7d58b08bc66a6b7d459783c5a4f6101a6/"
-        "numpy-2.4.4-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-        "df3775294accfdd75f32c74ae39fcba920c9a378a2fc18a12b6820aa8c1fb502",
-    ),
-    "pypy": Wheel(
-        PYPI + "a2/c8/f0a45426d6d21e7ea3310a15cf90c43a14d9232c31a837702dba437f3373/"
-        "numpy-2.4.4-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-        "9b2aec6af35c113b05695ebb5749a787acd63cafc83086a05771d1e1cd1e555f",
+        PYPI + "0a/0d/0e3ecece05b7a7e87ab9fb587855548da437a061326fff64a223b6dcb78a/"
+        "numpy-2.4.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+        "81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e",
     ),
     "freethreaded": Wheel(
         PYPI + "5f/86/2acbda8cc2af5f3d7bfc791192863b9e3e19674da7b5e533fded124d1299/"
         "numpy-2.4.4-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
         "b268594bccac7d7cf5844c7732e3f20c50921d94e36d7ec9b79e9857694b1b2f",
-    ),
-    "graalpy": Wheel(
-        "https://gds.oracle.com/download/graalpy-wheels/"
-        "numpy-2.4.4-graalpy313-graalpy253_313_native-manylinux_2_27_x86_64.whl",
-        "9416f32f85c2e628282f348a94db3d3d5281d29b604cd5beafef69e90f1a7106",
     ),
 }
 

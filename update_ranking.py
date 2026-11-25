@@ -87,7 +87,7 @@ def release_files(project):
         return json.load(response)["files"]
 
 
-def choose_version(files, cutoff, python="3.11"):
+def choose_version(files, cutoff, python="3.12"):
     """Return the newest stable release with a wheel for this Python, uploaded before the cutoff date."""
     Version, SpecifierSet = packaging_modules()
     best = None
@@ -136,7 +136,7 @@ def resolve(entry, cutoff, executable, root, pip):
     project = entry["project"]
     version = choose_version(release_files(project), cutoff)
     if version is None:
-        raise RuntimeError(f"{project}: no stable wheel for Python 3.11 before {cutoff}")
+        raise RuntimeError(f"{project}: no stable wheel for Python 3.12 before {cutoff}")
     module = choose_module(project, detect_modules(project, version, executable, root, pip))
     return {**entry, "version": version, "module": module}
 

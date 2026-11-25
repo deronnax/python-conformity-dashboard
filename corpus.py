@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 
-CPYTHON_VERSION = "3.11.17"
+CPYTHON_VERSION = "3.12.15"
 SOURCE_ROOT = f"https://github.com/python/cpython/blob/v{CPYTHON_VERSION}/Lib/"
 
 

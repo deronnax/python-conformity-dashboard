@@ -17,7 +17,7 @@ def wheel(version, uploaded="2026-10-01T00:00:00Z", **extra):
 class ChooseVersionTests(unittest.TestCase):
     CUTOFF = "2026-11-25"
 
-    def choose(self, files, python="3.11"):
+    def choose(self, files, python="3.12"):
         return update_ranking.choose_version(files, self.CUTOFF, python)
 
     def test_picks_the_newest_stable_release(self):
@@ -31,8 +31,8 @@ class ChooseVersionTests(unittest.TestCase):
 
     def test_skips_releases_that_reject_this_python(self):
         files = [wheel("1.0", **{"requires-python": ">=3.8"}),
-                 wheel("2.0", **{"requires-python": ">=3.12"}),
-                 wheel("1.5", **{"requires-python": "!=3.0.*,!=3.11.*,>=2.7"})]
+                 wheel("2.0", **{"requires-python": ">=3.13"}),
+                 wheel("1.5", **{"requires-python": "!=3.0.*,!=3.12.*,>=2.7"})]
         self.assertEqual(self.choose(files), "1.0")
 
     def test_ignores_source_distributions(self):

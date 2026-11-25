@@ -21,9 +21,9 @@ def published_history(data, previous=()):
 
 
 RUNTIMES = [
-    {"id": "cpython", "name": "CPython", "version": "3.11.17 (main) [Clang]",
+    {"id": "cpython", "name": "CPython", "version": "3.12.15 (main) [Clang]",
      "threads": {"workers": 4, "cores": 4, "sequential": 1.0, "parallel": 1.02, "speedup": 0.98, "gil": None}},
-    {"id": "pypy", "name": "PyPy", "version": "3.11.17 (abc)\n[PyPy 8.0.1 with GCC]",
+    {"id": "pypy", "name": "PyPy", "version": "3.12.15 (abc)\n[PyPy 8.0.1 with GCC]",
      "threads": {"status": "timeout", "detail": "The process exceeded 120 seconds."}},
 ]
 
@@ -36,7 +36,7 @@ def report(**overrides):
     base = {
         "generatedAt": "2026-11-25T14:58:13+00:00",
         "platform": "Linux 7.0 · x86_64",
-        "reference": "3.11.17",
+        "reference": "3.12.15",
         "runtimes": copy.deepcopy(RUNTIMES),
         "common": [{
             "id": "mmap-memoryview", "module": "mmap", "api": "mmap.mmap",
@@ -58,11 +58,11 @@ def report(**overrides):
         }],
         "packages": {
             "start": "2026-10-26", "end": "2026-11-25", "source": "https://github.com/ClickHouse/clickpy",
-            "query": "", "tags": {"pypy": {"interpreter": "pp311", "abi": "pypy311_pp80", "platform": "linux"}},
+            "query": "", "tags": {"pypy": {"interpreter": "pp312", "abi": "pypy312_pp80", "platform": "linux"}},
             "items": [{
                 "project": "lxml", "downloads": 551075, "version": "6.1.3", "module": "lxml.etree",
                 "outcomes": {"cpython": passed(),
-                             "pypy": {"status": "otherAbi", "detail": "Wheels published for pypy311_pp73."}},
+                             "pypy": {"status": "otherAbi", "detail": "Wheels published for pypy312_pp73."}},
             }],
         },
     }
@@ -83,14 +83,14 @@ def render(data, previous=()):
 class GenerateTests(unittest.TestCase):
     def test_renders_every_view_in_both_languages(self):
         pages, saved = render(report())
-        self.assertEqual(saved["reference"], "3.11.17")
+        self.assertEqual(saved["reference"], "3.12.15")
         for language, page in pages.items():
             for anchor in ("pypi-packages", "applications", "shared-cases", "cpython-tests", "interpreters", "history"):
                 self.assertIn(f'id="{anchor}"', page)
                 self.assertIn(f'href="#{anchor}"', page)
             self.assertIn(TRANSLATIONS[language]["statuses"]["otherAbi"], page)
             self.assertIn(TRANSLATIONS[language]["applicationTitles"]["numpy-array"], page)
-            self.assertIn('<span class="runtime-note">pypy311_pp80</span>', page)
+            self.assertIn('<span class="runtime-note">pypy312_pp80</span>', page)
             self.assertNotIn("$", page.replace("$ ", ""), "unsubstituted template field")
         self.assertIn("<pre>Returns None</pre>", pages["en"])
         self.assertIn("<pre>Lève BufferError</pre>", pages["fr"])
@@ -132,7 +132,7 @@ class InterpreterTests(unittest.TestCase):
         self.assertIn("×0.98", pages["en"])
         self.assertIn(TRANSLATIONS["en"]["gilUnknown"], pages["en"])
         self.assertIn(TRANSLATIONS["fr"]["statuses"]["timeout"], pages["fr"])
-        self.assertIn("<code>pypy311_pp80</code>", pages["en"])
+        self.assertIn("<code>pypy312_pp80</code>", pages["en"])
 
     def test_reports_the_gil_state_when_the_interpreter_names_it(self):
         data = report()

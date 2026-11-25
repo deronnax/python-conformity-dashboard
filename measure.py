@@ -28,7 +28,7 @@ from performance import summarize
 ROOT = Path(__file__).resolve().parent
 ARCHIVE = f"Python-{CPYTHON_VERSION}.tar.xz"
 ARCHIVE_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/{ARCHIVE}"
-ARCHIVE_SHA256 = "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
+ARCHIVE_SHA256 = "c2c4321961fab0fb999d66e0cecf521c2ab3994c7992873ea99e306c1094fd5a"
 RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
                  "freethreaded": "CPython 3.14t"}
 # Measured for speed and thread scaling only: RustPython has no C API, so it cannot
@@ -51,8 +51,10 @@ def identify(executable, runtime, cwd):
         raise ValueError(f"{executable} is not {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
     if runtime in ("cpython", "pypy") and version.split()[0] != CPYTHON_VERSION:
         raise ValueError(f"{RUNTIME_NAMES[runtime]} must target Python {CPYTHON_VERSION}, got {version.split()[0]}.")
+    if runtime == "graalpy" and version.split()[0].rpartition(".")[0] != CPYTHON_VERSION.rpartition(".")[0]:
+        raise ValueError(f"GraalPy must target Python {CPYTHON_VERSION.rpartition('.')[0]}, got {version.split()[0]}.")
     if runtime == "freethreaded" and "free-threading build" not in version:
-        raise ValueError(f"{executable} n’est pas une version CPython sans GIL.")
+        raise ValueError(f"{executable} is not a free-threaded CPython build.")
     return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version}
 
 
@@ -257,7 +259,7 @@ def upstream_results(executables, tests, cwd):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cpython", default=sys.executable, help=f"Reference binary, Python {CPYTHON_VERSION}")
-    parser.add_argument("--pypy", default="pypy3.11", help=f"PyPy binary targeting Python {CPYTHON_VERSION}")
+    parser.add_argument("--pypy", default="pypy3.12", help=f"PyPy binary targeting Python {CPYTHON_VERSION}")
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
     parser.add_argument("--rustpython", help="RustPython binary. Measured for performance and threads only.")
     parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
