@@ -19,6 +19,7 @@ from urllib.request import urlretrieve
 from applications import application_results
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
 from dashboard import generate
+from package_bench import package_results
 
 
 ROOT = Path(__file__).resolve().parent
@@ -207,6 +208,7 @@ def main():
     parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
     parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
     parser.add_argument("--applications", action="store_true", help="Mesurer Django, Bottle et NumPy dans un dossier temporaire")
+    parser.add_argument("--packages", action="store_true", help="Tester l’installation et l’import des 50 paquets PyPy sélectionnés")
     parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
     parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Dossier du site généré")
     args = parser.parse_args()
@@ -233,6 +235,7 @@ def main():
                 "common": comparisons(executables, directory),
                 "upstream": upstream_results(executables, tests, directory),
                 "applications": application_results(executables, directory, invoke) if args.applications else [],
+                "packages": package_results(executables, directory) if args.packages else None,
             }
             generate(report, args.output)
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
@@ -244,6 +247,13 @@ def main():
             outcomes = [row["outcomes"][runtime]["status"] for row in report[suite] if runtime in row["outcomes"]]
             if outcomes:
                 print(f"{suite} / {runtime}: {outcomes.count('passed')}/{len(outcomes)} réussis")
+    if report["packages"]:
+        for runtime in executables:
+            counts = {}
+            for package in report["packages"]["items"]:
+                status = package["outcomes"][runtime]["status"]
+                counts[status] = counts.get(status, 0) + 1
+            print(f"packages / {runtime}: {counts}")
     return int(any(row["outcomes"]["cpython"]["status"] != "passed"
                    for suite in ("common", "upstream") for row in report[suite]))
 

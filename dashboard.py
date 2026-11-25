@@ -5,25 +5,26 @@ import hashlib
 import json
 import re
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from html import escape
 from pathlib import Path
 from string import Template
+from urllib.parse import quote
 
 from dashboard_content import TRANSLATIONS, USE_CASES
 
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"uses": "use-cases", "common": "shared-cases", "upstream": "cpython-tests"}
+VIEWS = {"uses": "use-cases", "packages": "pypy-packages", "common": "shared-cases", "upstream": "cpython-tests"}
 
 
 def visible_runtimes(rows, runtimes):
     return [runtime for runtime in runtimes if any(runtime["id"] in row["outcomes"] for row in rows)]
 
 
-def table_head(label, runtimes):
-    columns = [f'<th scope="col">{escape(label)}</th>']
+def table_head(labels, runtimes):
+    columns = [f'<th scope="col">{escape(label)}</th>' for label in labels]
     for runtime in runtimes:
         columns.append(f'<th scope="col" title="{escape(runtime["version"])}">{escape(runtime["name"])}</th>')
     return "<thead><tr>" + "".join(columns) + "</tr></thead>"
@@ -37,6 +38,14 @@ def badge(outcome, copy):
 
 def outcome_detail(outcome, language):
     return outcome.get("detailFr", outcome["detail"]) if language == "fr" else outcome["detail"]
+
+
+def detailed_badge(outcome, language, copy):
+    detail = outcome_detail(outcome, language)
+    label = badge(outcome, copy)
+    if detail:
+        return f'<details class="application-detail"><summary>{label}</summary><pre>{escape(detail)}</pre></details>'
+    return label
 
 
 def render_summaries(rows, runtimes, copy):
@@ -117,7 +126,7 @@ def render_comparison(suite, report, language, copy):
         </div>
         <div class="table-scroll" role="region" aria-label="{escape(copy["caseTable"])}" tabindex="0">
           <table>
-            {table_head(copy["case"], runtimes)}
+            {table_head((copy["case"],), runtimes)}
             <tbody>
               {"".join(table_rows)}
               <tr data-empty hidden><td class="empty" colspan="{len(runtimes) + 1}">{escape(copy["empty"])}</td></tr>
@@ -140,16 +149,11 @@ def render_applications(report, language, copy):
             f'<th scope="row"><span class="application-name">{escape(name)}</span>{escape(description)}</th>'
         ]
         for runtime in runtimes:
-            outcome = row["outcomes"][runtime["id"]]
-            detail = outcome_detail(outcome, language)
-            label = badge(outcome, copy)
-            if detail:
-                label = f'<details class="application-detail"><summary>{label}</summary><pre>{escape(detail)}</pre></details>'
-            cells.append(f"<td>{label}</td>")
+            cells.append(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>')
         listing.append("<tr>" + "".join(cells) + "</tr>")
     return f"""<div class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0">
         <table class="application-table">
-          {table_head(copy["appCase"], runtimes)}
+          {table_head((copy["appCase"],), runtimes)}
           <tbody>{"".join(listing)}</tbody>
         </table>
       </div>"""
@@ -177,6 +181,50 @@ def render_use_cases(report, language, copy):
       </section>"""
 
 
+def render_packages(report, language, copy):
+    heading = f'<h2>{escape(copy["packagesTitle"])}</h2>'
+    ranking = report.get("packages")
+    if not ranking:
+        return (
+            f'<section id="{VIEWS["packages"]}" data-dashboard-panel>'
+            f'{heading}<p>{escape(copy["packagesEmpty"])}</p></section>'
+        )
+    rows = ranking["items"]
+    runtimes = visible_runtimes(rows, report["runtimes"])
+    listing = []
+    for number, row in enumerate(rows, 1):
+        project, version, module = row["project"], row["version"], row["module"]
+        url = f"https://pypi.org/project/{quote(project, safe='')}/{quote(version, safe='')}/"
+        downloads = format(row["downloads"], ",")
+        if language == "fr":
+            downloads = downloads.replace(",", "\u202f")
+        cells = [
+            f'<td>{number}</td>',
+            f'<th scope="row"><a href="{escape(url)}">{escape(project)}</a> {escape(version)}'
+            f'<code class="package-module">{escape(module)}</code></th>',
+            f'<td>{escape(downloads)}</td>',
+        ]
+        cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
+        listing.append("<tr>" + "".join(cells) + "</tr>")
+    last_date = date.fromisoformat(ranking["end"]) - timedelta(days=1)
+    window = copy["packagesWindow"].format(start=ranking["start"], end=last_date)
+    labels = (copy["rank"], copy["package"], copy["downloads"])
+    return f"""<section id="{VIEWS["packages"]}" data-dashboard-panel>
+        {heading}
+        <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
+        <p class="description">{escape(copy["packagesMethod"])}</p>
+        <div class="summaries" aria-label="{escape(copy["summaries"])}">
+          {render_summaries(rows, runtimes, copy)}
+        </div>
+        <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
+          <table class="package-table">
+            {table_head(labels, runtimes)}
+            <tbody>{"".join(listing)}</tbody>
+          </table>
+        </div>
+      </section>"""
+
+
 def render_page(report, language, template, assets):
     copy = TRANSLATIONS[language]
     base = "../" if language == "fr" else ""
@@ -196,6 +244,7 @@ def render_page(report, language, template, assets):
         platform=escape(report["platform"]),
         referenceVersion=escape(report["reference"]),
         useCases=render_use_cases(report, language, copy),
+        packages=render_packages(report, language, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
         scriptVersion=hashlib.sha256(assets["dashboard.js"]).hexdigest()[:12],

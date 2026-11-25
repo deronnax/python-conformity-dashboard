@@ -42,6 +42,9 @@ button, select { font: inherit; color: inherit; cursor: pointer; }
 .sources { display: flex; flex-wrap: wrap; gap: .25rem .75rem; margin: .65rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
 #application-checks { margin-top: 1.75rem; }
 .application-table tbody th { width: 42%; }
+.package-results { margin-top: 1rem; }
+.package-table tbody th { width: auto; }
+.package-module { display: block; color: var(--muted); }
 .application-name { display: block; font-weight: 650; }
 .application-detail pre { margin: .45rem 0 0; max-inline-size: 28rem; max-block-size: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .7rem; }
@@ -70,7 +73,7 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .detail-runtime { margin-top: .65rem; font-weight: 650; }
 .status { display: inline-block; padding: .18rem .45rem; border-radius: .3rem; background: #e8edf2; color: #334860; font-weight: 650; white-space: nowrap; }
 .status.passed { background: #deefe5; color: #205536; }
-.status.different, .status.error { background: #fbe7e1; color: #832d1a; }
+.status.different, .status.error, .status.installError, .status.importError { background: #fbe7e1; color: #832d1a; }
 .status.missing, .status.noWheel { background: #fff0ca; color: #664500; }
 .empty { color: var(--muted); padding: 1rem; }
 .methodology { margin-top: 1.15rem; padding: .9rem 1rem; background: #e5eeee; border-radius: .6rem; }

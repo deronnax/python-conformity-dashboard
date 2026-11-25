@@ -1,0 +1,308 @@
+{
+  "start": "2026-10-26",
+  "end": "2026-11-25",
+  "source": "https://github.com/ClickHouse/clickpy",
+  "query": "SELECT project, count() AS downloads\nFROM pypi.pypi\nPREWHERE project IN (\n    SELECT DISTINCT replaceRegexpAll(lower(name), '[-_.]+', '-')\n    FROM pypi.projects WHERE match(arrayElement(splitByChar('-', filename), -3), '(^|[.])pp[0-9]+([.]|$)') AND endsWith(filename,'.whl')\n) AND date >= '2026-10-26' AND date < '2026-11-25'\nWHERE match(arrayElement(splitByChar('-', filename), -3), '(^|[.])pp[0-9]+([.]|$)') AND endsWith(filename,'.whl')\nGROUP BY project\nORDER BY downloads DESC, project\nLIMIT 50 FORMAT JSONEachRow",
+  "items": [
+    {
+      "project": "pydantic-core",
+      "downloads": 1491091,
+      "version": "2.50.5",
+      "module": "pydantic_core"
+    },
+    {
+      "project": "cryptography",
+      "downloads": 1255913,
+      "version": "50.0.2",
+      "module": "cryptography"
+    },
+    {
+      "project": "pyzmq",
+      "downloads": 900080,
+      "version": "27.3.0",
+      "module": "zmq"
+    },
+    {
+      "project": "lxml",
+      "downloads": 551075,
+      "version": "6.1.3",
+      "module": "lxml.etree"
+    },
+    {
+      "project": "rpds-py",
+      "downloads": 547621,
+      "version": "2026.9.1",
+      "module": "rpds"
+    },
+    {
+      "project": "pillow",
+      "downloads": 401722,
+      "version": "13.0.0",
+      "module": "PIL.Image"
+    },
+    {
+      "project": "websockets",
+      "downloads": 248813,
+      "version": "17.4",
+      "module": "websockets"
+    },
+    {
+      "project": "pycryptodome",
+      "downloads": 229702,
+      "version": "4.6.0",
+      "module": "Crypto.Cipher.AES"
+    },
+    {
+      "project": "geventhttpclient",
+      "downloads": 217092,
+      "version": "2.6.2",
+      "module": "geventhttpclient"
+    },
+    {
+      "project": "dependency-injector",
+      "downloads": 189546,
+      "version": "4.49.1",
+      "module": "dependency_injector.containers"
+    },
+    {
+      "project": "pendulum",
+      "downloads": 164673,
+      "version": "3.3.0",
+      "module": "pendulum"
+    },
+    {
+      "project": "python-bidi",
+      "downloads": 87401,
+      "version": "0.6.12",
+      "module": "bidi"
+    },
+    {
+      "project": "argon2-cffi-bindings",
+      "downloads": 83004,
+      "version": "26.2.0",
+      "module": "_argon2_cffi_bindings"
+    },
+    {
+      "project": "qh3",
+      "downloads": 72845,
+      "version": "2.1.0",
+      "module": "qh3"
+    },
+    {
+      "project": "bcrypt",
+      "downloads": 68725,
+      "version": "5.0.0",
+      "module": "bcrypt"
+    },
+    {
+      "project": "rapidfuzz",
+      "downloads": 67917,
+      "version": "3.14.6",
+      "module": "rapidfuzz"
+    },
+    {
+      "project": "hypothesis",
+      "downloads": 65579,
+      "version": "6.170.17",
+      "module": "hypothesis"
+    },
+    {
+      "project": "watchfiles",
+      "downloads": 64841,
+      "version": "1.3.0",
+      "module": "watchfiles"
+    },
+    {
+      "project": "xxhash",
+      "downloads": 49810,
+      "version": "4.1.0",
+      "module": "xxhash"
+    },
+    {
+      "project": "cachebox",
+      "downloads": 42508,
+      "version": "6.2.11",
+      "module": "cachebox"
+    },
+    {
+      "project": "matplotlib",
+      "downloads": 40476,
+      "version": "3.11.2",
+      "module": "matplotlib"
+    },
+    {
+      "project": "uuid-utils",
+      "downloads": 36642,
+      "version": "1.2.0",
+      "module": "uuid_utils"
+    },
+    {
+      "project": "clickhouse-connect",
+      "downloads": 36245,
+      "version": "1.13.0",
+      "module": "clickhouse_connect"
+    },
+    {
+      "project": "coverage",
+      "downloads": 33911,
+      "version": "7.17.5",
+      "module": "coverage"
+    },
+    {
+      "project": "zstd",
+      "downloads": 32984,
+      "version": "1.5.7.2",
+      "module": "zstd"
+    },
+    {
+      "project": "pycryptodomex",
+      "downloads": 31580,
+      "version": "3.24.2",
+      "module": "Cryptodome.Cipher.AES"
+    },
+    {
+      "project": "granian",
+      "downloads": 31334,
+      "version": "2.8.9",
+      "module": "granian"
+    },
+    {
+      "project": "watchdog",
+      "downloads": 26536,
+      "version": "7.1.1",
+      "module": "watchdog"
+    },
+    {
+      "project": "dissect-util",
+      "downloads": 24752,
+      "version": "3.24",
+      "module": "dissect.util"
+    },
+    {
+      "project": "pycrdt",
+      "downloads": 24086,
+      "version": "0.14.13",
+      "module": "pycrdt"
+    },
+    {
+      "project": "bitarray",
+      "downloads": 23912,
+      "version": "3.12.4",
+      "module": "bitarray"
+    },
+    {
+      "project": "pyromark",
+      "downloads": 23870,
+      "version": "0.10.6",
+      "module": "pyromark"
+    },
+    {
+      "project": "pyfaup-rs",
+      "downloads": 23528,
+      "version": "0.4.32",
+      "module": "pyfaup"
+    },
+    {
+      "project": "attoworld",
+      "downloads": 22862,
+      "version": "2026.2.10",
+      "module": "attoworld"
+    },
+    {
+      "project": "lazy-object-proxy",
+      "downloads": 22761,
+      "version": "1.13.0",
+      "module": "lazy_object_proxy"
+    },
+    {
+      "project": "pyfamsa",
+      "downloads": 21681,
+      "version": "0.7.0",
+      "module": "pyfamsa"
+    },
+    {
+      "project": "backports-zstd",
+      "downloads": 20669,
+      "version": "1.8.0",
+      "module": "backports.zstd"
+    },
+    {
+      "project": "fable-library",
+      "downloads": 19245,
+      "version": "5.28.0",
+      "module": "fable_library"
+    },
+    {
+      "project": "rignore",
+      "downloads": 18546,
+      "version": "0.8.1",
+      "module": "rignore"
+    },
+    {
+      "project": "python-calamine",
+      "downloads": 18088,
+      "version": "0.9.1",
+      "module": "python_calamine"
+    },
+    {
+      "project": "brotlicffi",
+      "downloads": 17242,
+      "version": "1.2.1.0",
+      "module": "brotlicffi"
+    },
+    {
+      "project": "kiwisolver",
+      "downloads": 16921,
+      "version": "1.5.1",
+      "module": "kiwisolver"
+    },
+    {
+      "project": "dulwich",
+      "downloads": 15578,
+      "version": "1.2.21",
+      "module": "dulwich"
+    },
+    {
+      "project": "cramjam",
+      "downloads": 15045,
+      "version": "2.14.0",
+      "module": "cramjam"
+    },
+    {
+      "project": "fastar",
+      "downloads": 14798,
+      "version": "0.12.0",
+      "module": "fastar"
+    },
+    {
+      "project": "multiprocess",
+      "downloads": 14600,
+      "version": "0.70.19",
+      "module": "multiprocess"
+    },
+    {
+      "project": "aplr",
+      "downloads": 13822,
+      "version": "10.27.0",
+      "module": "aplr"
+    },
+    {
+      "project": "matrix-synapse",
+      "downloads": 13679,
+      "version": "1.166.0",
+      "module": "synapse"
+    },
+    {
+      "project": "cytoolz",
+      "downloads": 13236,
+      "version": "1.2.0",
+      "module": "cytoolz"
+    },
+    {
+      "project": "ry",
+      "downloads": 12807,
+      "version": "0.0.111",
+      "module": "ry"
+    }
+  ]
+}
