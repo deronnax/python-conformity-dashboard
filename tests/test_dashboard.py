@@ -171,6 +171,7 @@ class ContractAndVersionTests(unittest.TestCase):
         pages, _ = render(report())
         self.assertIn(">8.0.1</td>", pages["en"])
         self.assertNotIn("data-contract-filter", pages["en"])
+        self.assertNotIn(TRANSLATIONS["en"]["performanceOnly"], pages["en"])
 
 
 class VersionSwitchTests(unittest.TestCase):

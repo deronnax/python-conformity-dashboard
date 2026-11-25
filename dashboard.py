@@ -52,6 +52,13 @@ def version_notes(runtimes, reference, copy):
             for runtime in runtimes if cross_version(runtime, reference)}
 
 
+def performance_only_note(report, copy):
+    """Explain why RustPython is missing from the conformity views, when it was measured at all."""
+    if not any(runtime["id"] == "rustpython" for runtime in report["runtimes"]):
+        return ""
+    return f'<p class="description">{escape(copy["performanceOnly"])}</p>'
+
+
 def visible_runtimes(rows, runtimes):
     return [runtime for runtime in runtimes if any(runtime["id"] in row["outcomes"] for row in rows)]
 
@@ -199,7 +206,7 @@ def render_comparison(suite, report, language, copy):
     return f"""<section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
         <h2>{escape(copy[suite + "Tab"])}</h2>
         <p class="description">{escape(copy["descriptions"][suite])}</p>
-        <p class="description">{escape(copy["performanceOnly"])}</p>
+        {performance_only_note(report, copy)}
         {contract_summary}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, reference=report["reference"])}
@@ -248,7 +255,7 @@ def render_applications(report, language, copy):
     return f"""<section id="{VIEWS["applications"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(copy["descriptions"]["applications"])}</p>
-        <p class="description">{escape(copy["performanceOnly"])}</p>
+        {performance_only_note(report, copy)}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "applicationsPassedOn", report["reference"])}
         </div>
@@ -296,7 +303,7 @@ def render_packages(report, language, copy):
         {heading}
         <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
         <p class="description">{escape(copy["packagesMethod"])}</p>
-        <p class="description">{escape(copy["performanceOnly"])}</p>
+        {performance_only_note(report, copy)}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "packagesPassedOn", report["reference"])}
         </div>
