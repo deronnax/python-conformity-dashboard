@@ -98,15 +98,53 @@ function initializeDashboard() {
 
   const panels = [...document.querySelectorAll("[data-dashboard-panel]")];
   const navigation = document.querySelectorAll("[data-dashboard-link]");
+  // A link to a row shows that row even when the filters hide it, and opens its details.
+  function reveal(row) {
+    if (row.hidden) {
+      moduleName = "";
+      contractName = "";
+      differencesOnly = false;
+      filterRows();
+    }
+    for (const details of row.querySelectorAll("details")) details.open = true;
+    row.scrollIntoView({ block: "center" });
+  }
+
   function selectView() {
-    const anchor = document.getElementById(location.hash.slice(1));
+    const anchor = document.getElementById(decodeURIComponent(location.hash.slice(1)));
     const selected = anchor?.closest("[data-dashboard-panel]") ?? panels[0];
     for (const panel of panels) panel.hidden = panel !== selected;
     for (const link of navigation) {
       if (link.hash === `#${selected.id}`) link.setAttribute("aria-current", "location");
       else link.removeAttribute("aria-current");
     }
+    if (anchor?.tagName === "TR") reveal(anchor);
   }
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      // Without the asynchronous clipboard (file:// pages), select a temporary copy.
+      const area = Object.assign(document.createElement("textarea"), { value: text });
+      document.body.append(area);
+      area.select();
+      const copied = document.execCommand("copy");
+      area.remove();
+      return copied;
+    }
+  }
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-copy]");
+    if (!button) return;
+    const label = button.textContent;
+    if (await copyText(button.dataset.copy)) {
+      button.textContent = button.dataset.copied;
+      setTimeout(() => { button.textContent = label; }, 1500);
+    }
+  });
 
   // Switching language or Python version keeps the view and the filters.
   for (const link of [...languageLinks, ...document.querySelectorAll("[data-version-link]")]) {
@@ -122,8 +160,8 @@ function initializeDashboard() {
     });
   }
   window.addEventListener("hashchange", selectView);
-  selectView();
   filterRows();
+  selectView();
 }
 
 function initializeCharts() {

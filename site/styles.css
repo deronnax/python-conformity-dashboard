@@ -156,3 +156,11 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
   .package-table tbody th, .package-table thead th:nth-child(2) { position: sticky; left: 0; z-index: 1; background: inherit; }
   .package-table thead th:nth-child(2) { z-index: 3; background: #edf3f3; }
 }
+
+/* Row links: visible on hover or focus, and always on touch screens. */
+.permalink { float: inline-end; margin-inline-start: .4rem; color: var(--muted); text-decoration: none; opacity: 0; }
+tr:hover .permalink, .permalink:focus-visible { opacity: 1; }
+@media (hover: none) { .permalink { opacity: .6; } }
+tr:target > * { background: #fff6d6; }
+.copy-button { display: block; margin: .35rem 0 .2rem; padding: .15rem .5rem; font-size: .78rem; border: 1px solid #a8bac4; border-radius: .3rem; background: var(--paper); }
+.copy-button:hover { background: #e5eeee; }

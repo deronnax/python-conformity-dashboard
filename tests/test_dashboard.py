@@ -1,5 +1,6 @@
 import copy
 import json
+from html import escape
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -221,6 +222,30 @@ class BlockerTests(unittest.TestCase):
     def test_no_blockers_no_table(self):
         pages, _ = render(report())
         self.assertNotIn(TRANSLATIONS["en"]["blockersTitle"], pages["en"])
+
+
+class DeepLinkTests(unittest.TestCase):
+    def test_rows_have_stable_anchors_and_permalinks(self):
+        pages, _ = render(report())
+        page = pages["en"]
+        for fragment in ("case-mmap-memoryview", "test-test.test_json.test.test_empty", "package-lxml",
+                         "scenario-numpy-array"):
+            self.assertIn(f'id="{fragment}"', page)
+            self.assertIn(f'href="#{fragment}"', page)
+
+    def test_cases_copy_a_standalone_reproduction(self):
+        data = report()
+        data["common"][0]["code"] = "import mmap\n\nregion = mmap.mmap(-1, 4)\nview = memoryview(region)\nregion.close()"
+        pages, _ = render(data)
+        script = ("# Python Conformity: mmap-memoryview\n# CPython 3.12.15: Raises BufferError\nimport mmap\n\n"
+                  "region = mmap.mmap(-1, 4)\nview = memoryview(region)\nprint(repr(region.close()))\n")
+        self.assertIn(f'data-copy="{escape(script)}"', pages["en"])
+
+    def test_packages_copy_the_install_and_import_commands(self):
+        pages, _ = render(report())
+        command = 'python -m pip install --only-binary=:all: lxml==6.1.3\npython -c "import lxml.etree"\n'
+        self.assertIn(f'data-copy="{escape(command)}"', pages["fr"])
+        self.assertIn(TRANSLATIONS["fr"]["copyReproduction"], pages["fr"])
 
 
 class InterpreterTests(unittest.TestCase):

@@ -148,7 +148,30 @@ def contract_line(row, copy):
     return f'<p class="contract">{escape(prefix)}{label}{escape(suffix)}</p>'
 
 
-def case_details(row, runtimes, language, copy, *, observed):
+def anchor(kind, name):
+    """Stable fragment for a row, such as case-mmap-memoryview or package-cryptography."""
+    return f"{kind}-" + re.sub(r"[^a-z0-9._-]+", "-", str(name).lower()).strip("-")
+
+
+def permalink(fragment, copy):
+    return (f'<a class="permalink" href="#{escape(fragment)}" aria-label="{escape(copy["permalink"])}"'
+            f' title="{escape(copy["permalink"])}">#</a>')
+
+
+def copy_button(text, copy):
+    return (f'<button type="button" class="copy-button" data-copy="{escape(text)}"'
+            f' data-copied="{escape(copy["copied"])}">{escape(copy["copyReproduction"])}</button>')
+
+
+def reproduction(row, reference, language, copy):
+    """A standalone script that prints what the case observes."""
+    lines = row["code"].splitlines()
+    expected = describe_observation(row["outcomes"]["cpython"], language, copy) if "cpython" in row["outcomes"] else ""
+    header = [f"# Python Conformity: {row['id']}", f"# CPython {reference}: {expected}".rstrip(": ")]
+    return "\n".join(header + lines[:-1] + [f"print(repr({lines[-1]}))"]) + "\n"
+
+
+def case_details(row, runtimes, language, copy, *, observed, reference=""):
     api = row.get("api")
     title = row.get("titleFr", row["title"]) if language == "fr" else row["title"]
     label, description = (api, title) if api else (title, row["module"])
@@ -158,6 +181,7 @@ def case_details(row, runtimes, language, copy, *, observed):
     contents = []
     if row.get("code"):
         contents.append(f'<pre>{escape(row["code"])}</pre>')
+        contents.append(copy_button(reproduction(row, reference, language, copy), copy))
     if row.get("contract"):
         contents.append(contract_line(row, copy))
     if (row.get("source") or "").startswith("https://"):
@@ -182,13 +206,14 @@ def render_comparison(suite, report, language, copy):
     table_rows = []
     for row in rows:
         difference = any(outcome["status"] != "passed" for outcome in row["outcomes"].values())
-        details = case_details(row, runtimes, language, copy, observed=suite == "common")
-        cells = [f'<th scope="row">{details}</th>']
+        details = case_details(row, runtimes, language, copy, observed=suite == "common", reference=report["reference"])
+        fragment = anchor("case" if suite == "common" else "test", row["id"])
+        cells = [f'<th scope="row">{permalink(fragment, copy)}{details}</th>']
         cells.extend(f'<td>{badge(row["outcomes"][runtime["id"]], copy)}</td>' for runtime in runtimes)
         flag = " data-difference" if difference else ""
         if row.get("contract"):
             flag += f' data-contract="{escape(row["contract"])}"'
-        table_rows.append(f'<tr data-module="{escape(row["module"])}"{flag}>{"".join(cells)}</tr>')
+        table_rows.append(f'<tr id="{escape(fragment)}" data-module="{escape(row["module"])}"{flag}>{"".join(cells)}</tr>')
 
     modules = sorted({row["module"] for row in rows})
     options = [f'<option value="">{escape(copy["allModules"])}</option>']
@@ -245,12 +270,13 @@ def render_applications(report, language, copy):
     listing = []
     for row in rows:
         title = copy["applicationTitles"].get(row["id"], row["id"])
+        fragment = anchor("scenario", row["id"])
         cells = [
-            f'<th scope="row"><strong>{escape(row["package"])}</strong> {escape(row["version"])}'
+            f'<th scope="row">{permalink(fragment, copy)}<strong>{escape(row["package"])}</strong> {escape(row["version"])}'
             f'<span class="scenario-title">{escape(title)}</span></th>'
         ]
         cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
-        listing.append("<tr>" + "".join(cells) + "</tr>")
+        listing.append(f'<tr id="{escape(fragment)}">' + "".join(cells) + "</tr>")
     return f"""<section id="{VIEWS["applications"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(copy["descriptions"]["applications"])}</p>
@@ -327,14 +353,17 @@ def render_packages(report, language, copy):
         downloads = format(row["downloads"], ",")
         if language == "fr":
             downloads = downloads.replace(",", "\u202f")
+        fragment = anchor("package", project)
+        command = (f"python -m pip install --only-binary=:all: {project}=={version}\n"
+                   f"python -c \"import {module}\"\n")
         cells = [
             f'<td class="column-rank">{number}</td>',
-            f'<th scope="row"><a href="{escape(url)}">{escape(project)}</a> {escape(version)}'
-            f'<code class="package-module">{escape(module)}</code></th>',
+            f'<th scope="row">{permalink(fragment, copy)}<a href="{escape(url)}">{escape(project)}</a> {escape(version)}'
+            f'<code class="package-module">{escape(module)}</code>{copy_button(command, copy)}</th>',
             f'<td class="column-downloads">{escape(downloads)}</td>',
         ]
         cells.extend(f'<td>{package_cell(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
-        listing.append("<tr>" + "".join(cells) + "</tr>")
+        listing.append(f'<tr id="{escape(fragment)}">' + "".join(cells) + "</tr>")
     last_date = date.fromisoformat(ranking["end"]) - timedelta(days=1)
     window = copy["packagesWindow"].format(start=ranking["start"], end=last_date)
     labels = (copy["rank"], copy["package"], copy["downloads"])
@@ -469,7 +498,8 @@ def render_benchmarks(report, language, copy):
     for row in rows:
         title = row.get("titleFr", row["title"]) if language == "fr" else row["title"]
         cells = "".join(f"<td>{benchmark_cell(row, runtime, language, copy)}</td>" for runtime in runtimes)
-        listing.append(f'<tr><th scope="row"><code>{escape(row["id"])}</code>'
+        fragment = anchor("benchmark", row["id"])
+        listing.append(f'<tr id="{escape(fragment)}"><th scope="row">{permalink(fragment, copy)}<code>{escape(row["id"])}</code>'
                        f'<span class="scenario-title">{escape(title)}</span></th>{cells}</tr>')
     return f"""<section id="{VIEWS["performance"]}" data-dashboard-panel>
         {heading}
