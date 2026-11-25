@@ -211,6 +211,7 @@ def generate(report, output):
     for directory, language in ((output, "en"), (french, "fr")):
         (directory / "index.html").write_text(render_page(report, language, template, assets), encoding="utf-8")
     (output / "results.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    (output / "LICENSE").write_bytes((ROOT / "LICENSE").read_bytes())
     for name, contents in assets.items():
         (output / name).write_bytes(contents)
 
