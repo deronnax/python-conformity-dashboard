@@ -145,6 +145,7 @@ def render_comparison(suite, report, language, copy):
     return f"""<section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
         <h2>{escape(copy[suite + "Tab"])}</h2>
         <p class="description">{escape(copy["descriptions"][suite])}</p>
+        <p class="description">{escape(copy["performanceOnly"])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy)}
         </div>
@@ -191,6 +192,7 @@ def render_applications(report, language, copy):
     return f"""<section id="{VIEWS["applications"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(copy["descriptions"]["applications"])}</p>
+        <p class="description">{escape(copy["performanceOnly"])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "applicationsPassedOn")}
         </div>
@@ -236,6 +238,7 @@ def render_packages(report, language, copy):
         {heading}
         <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
         <p class="description">{escape(copy["packagesMethod"])}</p>
+        <p class="description">{escape(copy["performanceOnly"])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "packagesPassedOn")}
         </div>
