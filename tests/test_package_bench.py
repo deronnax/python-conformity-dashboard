@@ -31,6 +31,34 @@ class ForeignAbiTests(unittest.TestCase):
         self.assertEqual(package_bench.platform_family("macosx_11_0_universal2"), ("macosx", "universal2"))
 
 
+# The wheels cryptography 50.0.2 publishes for x86-64 Linux and for PyPy.
+CRYPTOGRAPHY = [
+    "cryptography-50.0.2-cp311-abi3-manylinux_2_28_x86_64.whl",
+    "cryptography-50.0.2-cp314-cp314t-manylinux_2_28_x86_64.whl",
+    "cryptography-50.0.2-pp311-pypy311_pp73-manylinux_2_28_x86_64.whl",
+    "cryptography-50.0.2-pp311-pypy311_pp73-manylinux_2_34_aarch64.whl",
+    "cryptography-50.0.2-pp311-pypy311_pp80-macosx_11_0_arm64.whl",
+    "cryptography-50.0.2-pp311-pypy311_pp80-win_amd64.whl",
+    "cryptography-50.0.2.tar.gz",
+]
+GRAALPY = {"interpreter": "graalpy312", "abi": "graalpy250_312_native", "platform": "manylinux_2_39_x86_64"}
+
+
+class OtherPythonVersionTests(unittest.TestCase):
+    def test_reports_wheels_of_the_same_implementation_for_another_python(self):
+        self.assertEqual(package_bench.other_python_versions(CRYPTOGRAPHY, PYPY_8), ["pp311"])
+
+    def test_ignores_other_platforms_and_implementations(self):
+        self.assertEqual(package_bench.other_python_versions(CRYPTOGRAPHY, GRAALPY), [])
+        macos = {**PYPY_8, "platform": "macosx_14_0_x86_64"}
+        self.assertEqual(package_bench.other_python_versions(CRYPTOGRAPHY, macos), [])
+
+    def test_version_independent_wheels_do_not_count(self):
+        freethreaded = {"interpreter": "cp313", "abi": "cp313t", "platform": "manylinux_2_39_x86_64"}
+        self.assertEqual(package_bench.other_python_versions(CRYPTOGRAPHY, freethreaded), ["cp314"])
+        self.assertEqual(package_bench.other_python_versions(CRYPTOGRAPHY[:1], freethreaded), [])
+
+
 class MissingWheelTests(unittest.TestCase):
     def test_classifies_a_release_built_for_another_abi(self):
         files = ["lxml-6.1.3-pp312-pypy312_pp73-manylinux_2_28_x86_64.whl"]
@@ -40,6 +68,22 @@ class MissingWheelTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "otherAbi")
         self.assertIn("pypy312_pp73", outcome["detail"])
         self.assertIn("pypy312_pp80", outcome["detailFr"])
+
+    def test_classifies_a_release_built_for_another_python_version(self):
+        package = {"project": "cryptography", "version": "50.0.2", "module": "cryptography"}
+        with mock.patch.object(package_bench, "release_files", return_value=CRYPTOGRAPHY):
+            outcome = package_bench.missing_wheel(
+                package, "ERROR: No matching distribution found for cryptography==50.0.2", PYPY_8, Path("/tmp/bench"))
+        self.assertEqual(outcome["status"], "otherPython")
+        self.assertIn("pp311", outcome["detail"])
+        self.assertIn("pp312", outcome["detailFr"])
+
+    def test_another_abi_takes_precedence_over_another_python(self):
+        files = CRYPTOGRAPHY + ["lxml-6.1.3-pp312-pypy312_pp73-manylinux_2_28_x86_64.whl"]
+        with mock.patch.object(package_bench, "release_files", return_value=files):
+            outcome = package_bench.missing_wheel(
+                PACKAGE, "ERROR: No matching distribution found for lxml==6.1.3", PYPY_8, Path("/tmp/bench"))
+        self.assertEqual(outcome["status"], "otherAbi")
 
     def test_keeps_missing_dependencies_as_missing_wheels(self):
         with mock.patch.object(package_bench, "release_files") as lookup:

@@ -97,7 +97,7 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .status.passed { background: #deefe5; color: #205536; }
 .status.different, .status.error, .status.installError, .status.importError, .status.crash, .status.internalError { background: #fbe7e1; color: #832d1a; }
 .status.missing, .status.noWheel { background: #fff0ca; color: #664500; }
-.status.otherAbi { background: #e2ecf8; color: #1d4874; }
+.status.otherAbi, .status.otherPython { background: #e2ecf8; color: #1d4874; }
 /* Measurement problems say nothing about conformity, so they look provisional. */
 .status.blocked, .status.timeout, .status.installTimeout, .status.installerUnavailable, .status.unverified {
   background: #f2ecf7; color: #573a72; outline: 1px dashed #9f86b8; outline-offset: -1px;
