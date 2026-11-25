@@ -17,10 +17,12 @@ from textwrap import dedent, indent
 from urllib.request import urlretrieve
 
 from applications import application_results
+from benchmarks import BENCHMARKS
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
 from dashboard import generate
 from history import load as load_history
 from package_bench import package_results
+from performance import summarize
 
 
 ROOT = Path(__file__).resolve().parent
@@ -199,6 +201,35 @@ def thread_results(executables, cwd):
     return measured
 
 
+def benchmark_results(executables, cwd):
+    """Time each benchmark in its own process and check its answer against CPython's."""
+    rows = []
+    for name, (_, title, title_fr) in BENCHMARKS.items():
+        measured = {}
+        for runtime, executable in executables.items():
+            observation = invoke(executable, str(ROOT / "benchmarks.py"), name, cwd=cwd, timeout=240)
+            try:
+                measured[runtime] = observation if isinstance(observation, dict) else json.loads(observation)
+            except ValueError:
+                measured[runtime] = result("blocked", observation)
+        expected = measured["cpython"].get("result")
+        outcomes = {}
+        for runtime, observed in measured.items():
+            if "samples" not in observed:
+                outcomes[runtime] = observed
+            elif expected is None:
+                outcomes[runtime] = result("unverified", f"The CPython reference did not finish.\nObserved: {observed['result']}",
+                                           detail_fr=f"La référence CPython n’a pas terminé.\nObservé : {observed['result']}")
+            elif observed["result"] != expected:
+                outcomes[runtime] = result("different", f"Expected: {expected}\nObserved: {observed['result']}",
+                                           detail_fr=f"Attendu : {expected}\nObservé : {observed['result']}")
+            else:
+                outcomes[runtime] = {"status": "passed", "detail": "", "first": observed["first"],
+                                     **summarize(observed["samples"])}
+        rows.append({"id": name, "title": title, "titleFr": title_fr, "outcomes": outcomes})
+    return rows
+
+
 def upstream_results(executables, tests, cwd):
     rows = []
     for module, methods in UPSTREAM.items():
@@ -228,6 +259,7 @@ def main():
     parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
     parser.add_argument("--freethreaded", help="Binaire CPython 3.14 sans GIL. Ajouté au corpus commun si fourni.")
     parser.add_argument("--history", type=Path, help="history.json d’une exécution précédente, complété par celle-ci")
+    parser.add_argument("--benchmarks", action="store_true", help="Chronométrer des noyaux de calcul et des charges de la bibliothèque standard")
     parser.add_argument("--applications", action="store_true", help="Mesurer Django, Bottle et NumPy dans un dossier temporaire")
     parser.add_argument("--packages", action="store_true", help="Tester l’installation et l’import des 50 paquets PyPy sélectionnés")
     parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
@@ -249,6 +281,7 @@ def main():
             runtimes = [identify(path, runtime, directory) for runtime, path in executables.items()]
             for runtime, threads in thread_results(executables, directory).items():
                 next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
+            benchmarks = benchmark_results(executables, directory) if args.benchmarks else []
             tests = extract_tests(args.source, directory)
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -257,6 +290,7 @@ def main():
                 "runtimes": runtimes,
                 "common": comparisons(executables, directory),
                 "upstream": upstream_results(executables, tests, directory),
+                "benchmarks": benchmarks,
                 "applications": application_results(executables, directory, invoke) if args.applications else [],
                 "packages": package_results(executables, directory) if args.packages else None,
             }

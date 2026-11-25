@@ -30,9 +30,15 @@ Le rendu des deux pages et des tableaux est réalisé en Python avec la biblioth
 
 Chaque exécution mesure `threads.py` sur chaque interpréteur : quatre threads exécutent la même fonction qui sature le processeur, et l’accélération compare leur durée à celle de quatre appels successifs. Environ ×1 signifie que les threads passent à tour de rôle (un verrou global). Une valeur proche de ×4 signifie qu’ils s’exécutent en parallèle. Le résultat dépend des cœurs de la machine, qui sont affichés. L’onglet **Interpréteurs** montre cette accélération, la version de Python visée, l’ABI des wheels et l’état du GIL quand l’interpréteur le communique (`sys._is_gil_enabled()`, à partir de Python 3.13).
 
+## Performance
+
+`--benchmarks` chronomètre huit programmes de `benchmarks.py`, chacun dans son propre processus : n corps, fannkuch-redux et norme spectrale (programmes du Computer Language Benchmarks Game), n reines, un calcul en virgule flottante, puis json, `re` et un comptage de mots avec `collections`. Chaque programme fait un premier appel à froid, deux tours de chauffe pour les compilateurs JIT et au moins trois tours chronométrés. L’onglet affiche la médiane et le rapport à CPython. Le détail donne le minimum, l’écart type et le temps du premier appel. Chaque programme imprime aussi un condensat de son résultat : une réponse différente de celle de CPython est un écart, pas un temps. La moyenne géométrique des rapports résume chaque interpréteur et alimente une courbe de l’historique.
+
+Les tests de `tests/test_performance.py` vérifient les noyaux contre les valeurs publiées. `pystone` n’en fait pas partie : c’est un portage de Dhrystone, une charge synthétique de 1984 qui n’est plus fournie avec CPython et que les compilateurs JIT optimisent sans rapport avec du code réel. Les machines GitHub partagent leur matériel, donc des écarts d’environ 10 % ne sont pas significatifs.
+
 ## Historique
 
-Chaque exécution ajoute un instantané compact (décomptes par état, interpréteur et vue) à `history.json`. GitHub Pages remplace tout le site à chaque déploiement : le workflow télécharge donc l’`history.json` publié, y ajoute son instantané et le republie. `--history chemin/history.json` fait de même en local. Un fichier absent ou illisible démarre un nouvel historique. L’onglet **Historique** trace une courbe par interpréteur, avec une vue en tableau des mêmes valeurs.
+Chaque exécution ajoute un instantané compact (décomptes par état, interpréteur et vue, vitesse relative) à `history.json`. GitHub Pages remplace tout le site à chaque déploiement : le workflow télécharge donc l’`history.json` publié, y ajoute son instantané et le republie. `--history chemin/history.json` fait de même en local. Un fichier absent ou illisible démarre un nouvel historique. L’onglet **Historique** trace une courbe par interpréteur, avec une vue en tableau des mêmes valeurs.
 
 ## GitHub Actions
 
