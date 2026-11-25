@@ -16,28 +16,54 @@ from dashboard_content import TRANSLATIONS
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"packages": "pypy-packages", "common": "shared-cases", "upstream": "cpython-tests"}
+VIEWS = {"packages": "pypy-packages", "applications": "applications", "common": "shared-cases", "upstream": "cpython-tests"}
+OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
 
 
 def visible_runtimes(rows, runtimes):
     return [runtime for runtime in runtimes if any(runtime["id"] in row["outcomes"] for row in rows)]
 
 
-def table_head(labels, runtimes):
-    columns = [f'<th scope="col">{escape(label)}</th>' for label in labels]
+def css_class(name):
+    return f' class="{escape(name)}"' if name else ""
+
+
+def table_head(labels, runtimes, *, classes=(), notes=None):
+    notes = notes or {}
+    classes = tuple(classes) + ("",) * (len(labels) - len(classes))
+    columns = [f'<th scope="col"{css_class(name)}>{escape(label)}</th>' for label, name in zip(labels, classes)]
     for runtime in runtimes:
-        columns.append(f'<th scope="col" title="{escape(runtime["version"])}">{escape(runtime["name"])}</th>')
+        note = notes.get(runtime["id"])
+        extra = f'<span class="runtime-note">{escape(note)}</span>' if note else ""
+        columns.append(f'<th scope="col" title="{escape(runtime["version"])}">{escape(runtime["name"])}{extra}</th>')
     return "<thead><tr>" + "".join(columns) + "</tr></thead>"
 
 
 def badge(outcome, copy):
     status = outcome["status"]
-    label = copy["noWheel"] if status == "noWheel" else copy["statuses"][status]
-    return f'<span class="status {escape(status)}">{escape(label)}</span>'
+    return f'<span class="status {escape(status)}">{escape(copy["statuses"][status])}</span>'
 
 
 def outcome_detail(outcome, language):
     return outcome.get("detailFr", outcome["detail"]) if language == "fr" else outcome["detail"]
+
+
+def describe_observation(outcome, language, copy):
+    """Phrase a shared-case observation such as "int: 6" or "exception: ValueError"."""
+    text = outcome["detail"]
+    if outcome["status"] not in ("passed", "different") or "\n" in text:
+        return outcome_detail(outcome, language)
+    phrases = copy["observations"]
+    if text.startswith("unexpected exception: "):
+        return phrases["unexpected"].format(exception=text.removeprefix("unexpected exception: "))
+    if text.startswith("exception: "):
+        return phrases["raises"].format(exception=text.removeprefix("exception: "))
+    match = OBSERVED_VALUE.fullmatch(text)
+    if not match:
+        return outcome_detail(outcome, language)
+    if match[1] == "NoneType":
+        return phrases["returnsNone"]
+    return phrases["returns"].format(value=match[2], type=match[1])
 
 
 def detailed_badge(outcome, language, copy):
@@ -48,7 +74,7 @@ def detailed_badge(outcome, language, copy):
     return label
 
 
-def render_summaries(rows, runtimes, copy):
+def render_summaries(rows, runtimes, copy, label_key="passedOn"):
     cards = []
     for runtime in runtimes:
         counts = Counter(row["outcomes"][runtime["id"]]["status"] for row in rows)
@@ -59,7 +85,7 @@ def render_summaries(rows, runtimes, copy):
         if named and runtime["id"] != "cpython":
             build = named[1]
         name = runtime["name"]
-        label = copy["passedOn"].format(runtime=name)
+        label = copy[label_key].format(runtime=name)
         breakdown = " · ".join(
             f"{counts[status]} {singular if counts[status] == 1 else plural}"
             for status, (singular, plural) in copy["totals"].items() if counts[status]
@@ -73,7 +99,7 @@ def render_summaries(rows, runtimes, copy):
     return "".join(cards)
 
 
-def case_details(row, runtimes, language, copy):
+def case_details(row, runtimes, language, copy, *, observed):
     api = row.get("api")
     title = row.get("titleFr", row["title"]) if language == "fr" else row["title"]
     label, description = (api, title) if api else (title, row["module"])
@@ -88,7 +114,8 @@ def case_details(row, runtimes, language, copy):
             f'<a href="{escape(row["source"])}" title="{escape(row["sourceTest"])}">{escape(copy["source"])}</a>'
         )
     for runtime in runtimes:
-        detail = outcome_detail(row["outcomes"][runtime["id"]], language)
+        outcome = row["outcomes"][runtime["id"]]
+        detail = describe_observation(outcome, language, copy) if observed else outcome_detail(outcome, language)
         if detail:
             contents.append(f'<p class="detail-runtime">{escape(runtime["name"])}</p><pre>{escape(detail)}</pre>')
     details.append('<div class="case-detail">' + "".join(contents) + "</div>")
@@ -101,7 +128,8 @@ def render_comparison(suite, report, language, copy):
     table_rows = []
     for row in rows:
         difference = any(outcome["status"] != "passed" for outcome in row["outcomes"].values())
-        cells = [f'<th scope="row">{case_details(row, runtimes, language, copy)}</th>']
+        details = case_details(row, runtimes, language, copy, observed=suite == "common")
+        cells = [f'<th scope="row">{details}</th>']
         cells.extend(f'<td>{badge(row["outcomes"][runtime["id"]], copy)}</td>' for runtime in runtimes)
         flag = " data-difference" if difference else ""
         table_rows.append(f'<tr data-module="{escape(row["module"])}"{flag}>{"".join(cells)}</tr>')
@@ -129,8 +157,42 @@ def render_comparison(suite, report, language, copy):
             {table_head((copy["case"],), runtimes)}
             <tbody>
               {"".join(table_rows)}
-              <tr data-empty hidden><td class="empty" colspan="{len(runtimes) + 1}">{escape(copy["empty"])}</td></tr>
+              <tr data-empty hidden><td class="empty" colspan="{len(runtimes) + 1}"
+                data-filtered="{escape(copy["empty"])}" data-differences="{escape(copy["noDifferences"])}">{escape(copy["empty"])}</td></tr>
             </tbody>
+          </table>
+        </div>
+      </section>"""
+
+
+def render_applications(report, language, copy):
+    heading = f'<h2>{escape(copy["applicationsTab"])}</h2>'
+    rows = report.get("applications") or []
+    if not rows:
+        return (
+            f'<section id="{VIEWS["applications"]}" data-dashboard-panel>'
+            f'{heading}<p class="description">{escape(copy["applicationsEmpty"])}</p></section>'
+        )
+    runtimes = visible_runtimes(rows, report["runtimes"])
+    listing = []
+    for row in rows:
+        title = copy["applicationTitles"].get(row["id"], row["id"])
+        cells = [
+            f'<th scope="row"><strong>{escape(row["package"])}</strong> {escape(row["version"])}'
+            f'<span class="scenario-title">{escape(title)}</span></th>'
+        ]
+        cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
+        listing.append("<tr>" + "".join(cells) + "</tr>")
+    return f"""<section id="{VIEWS["applications"]}" data-dashboard-panel>
+        {heading}
+        <p class="description">{escape(copy["descriptions"]["applications"])}</p>
+        <div class="summaries" aria-label="{escape(copy["summaries"])}">
+          {render_summaries(rows, runtimes, copy, "applicationsPassedOn")}
+        </div>
+        <div class="table-scroll" role="region" aria-label="{escape(copy["applicationsTab"])}" tabindex="0">
+          <table class="result-table">
+            {table_head((copy["scenario"],), runtimes)}
+            <tbody>{"".join(listing)}</tbody>
           </table>
         </div>
       </section>"""
@@ -154,23 +216,27 @@ def render_packages(report, language, copy):
         if language == "fr":
             downloads = downloads.replace(",", "\u202f")
         cells = [
-            f'<td>{number}</td>',
+            f'<td class="column-rank">{number}</td>',
             f'<th scope="row"><a href="{escape(url)}">{escape(project)}</a> {escape(version)}'
             f'<code class="package-module">{escape(module)}</code></th>',
-            f'<td>{escape(downloads)}</td>',
+            f'<td class="column-downloads">{escape(downloads)}</td>',
         ]
         cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
         listing.append("<tr>" + "".join(cells) + "</tr>")
     last_date = date.fromisoformat(ranking["end"]) - timedelta(days=1)
     window = copy["packagesWindow"].format(start=ranking["start"], end=last_date)
     labels = (copy["rank"], copy["package"], copy["downloads"])
+    abis = {runtime: tag["abi"] for runtime, tag in ranking.get("tags", {}).items()}
     return f"""<section id="{VIEWS["packages"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
         <p class="description">{escape(copy["packagesMethod"])}</p>
+        <div class="summaries" aria-label="{escape(copy["summaries"])}">
+          {render_summaries(rows, runtimes, copy, "packagesPassedOn")}
+        </div>
         <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
           <table class="package-table">
-            {table_head(labels, runtimes)}
+            {table_head(labels, runtimes, classes=("column-rank", "", "column-downloads"), notes=abis)}
             <tbody>{"".join(listing)}</tbody>
           </table>
         </div>
@@ -196,6 +262,7 @@ def render_page(report, language, template, assets):
         platform=escape(report["platform"]),
         referenceVersion=escape(report["reference"]),
         packages=render_packages(report, language, copy),
+        applications=render_applications(report, language, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
         scriptVersion=hashlib.sha256(assets["dashboard.js"]).hexdigest()[:12],

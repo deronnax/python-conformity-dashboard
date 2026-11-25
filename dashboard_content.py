@@ -12,11 +12,22 @@ TRANSLATIONS = {
         "packagesTab": "PyPy packages",
         "packagesTitle": "Top 50 packages by PyPy wheel downloads",
         "packagesWindow": "UTC downloads from {start} through {end}",
-        "packagesMethod": "The ranking counts PyPI downloads of wheels tagged for PyPy across versions and platforms. Each check installs the pinned release and its dependencies from wheels, then imports the named module. A missing wheel can belong to the package or a dependency.",
+        "packagesMethod": "The ranking counts PyPI downloads of wheels tagged for PyPy across versions and platforms. Each check installs the pinned release and its dependencies from wheels, then imports the named module. A missing wheel can belong to the package or a dependency. “Other ABI only” means the release has wheels for this Python version and platform, built for another ABI of the interpreter, such as PyPy 7.3 (pp73) instead of PyPy 8 (pp80).",
+        "packagesPassedOn": "Packages imported on {runtime}",
         "packagesEmpty": "Package checks were not run for this report.",
         "package": "Package and import",
         "rank": "Rank",
         "downloads": "PyPy wheel downloads",
+        "applicationsTab": "Applications",
+        "applicationsEmpty": "Application checks were not run for this report.",
+        "applicationsPassedOn": "Scenarios passed on {runtime}",
+        "scenario": "Scenario",
+        "applicationTitles": {
+            "django-template": "Render a template with autoescaping",
+            "django-sqlite": "Aggregate rows after a rolled-back SQLite transaction",
+            "bottle-route": "Route a WSGI request to a JSON handler",
+            "numpy-array": "Slice arrays and solve a linear system"
+        },
         "commonTab": "Shared cases",
         "upstreamTab": "CPython tests",
         "summaries": "Results by interpreter",
@@ -32,14 +43,23 @@ TRANSLATIONS = {
         "passedOn": "Cases passed on {runtime}",
         "case": "Case",
         "empty": "No cases match these filters.",
+        "noDifferences": "No differences or unmeasured cases. Clear the filter to see every case.",
+        "observations": {
+            "raises": "Raises {exception}",
+            "unexpected": "Raises an unexpected {exception}",
+            "returns": "Returns {value} ({type})",
+            "returnsNone": "Returns None"
+        },
         "allModules": "All modules",
-        "noWheel": "No matching wheel",
         "descriptions": {
             "common": "Each interpreter runs the same calls. Values and exceptions are compared with the CPython reference.",
+            "applications": "Small scenarios with pinned releases of Django, Bottle and NumPy, run on each interpreter from isolated wheel directories.",
             "upstream": "Selected test methods from the CPython source tree, run on CPython and PyPy."
         },
         "statuses": {
             "passed": "Passed",
+            "noWheel": "No wheel",
+            "otherAbi": "Other ABI only",
             "different": "Different",
             "missing": "Missing API",
             "skipped": "Skipped",
@@ -55,6 +75,7 @@ TRANSLATIONS = {
         },
         "totals": {
             "noWheel": ["missing wheel", "missing wheels"],
+            "otherAbi": ["wheel for another ABI only", "wheels for another ABI only"],
             "installError": ["failed installation", "failed installations"],
             "installTimeout": ["installation timeout", "installation timeouts"],
             "installerUnavailable": ["installer unavailable", "installer unavailable"],
@@ -105,11 +126,22 @@ TRANSLATIONS = {
         "packagesTab": "Paquets PyPy",
         "packagesTitle": "Les 50 paquets aux wheels PyPy les plus téléchargés",
         "packagesWindow": "Téléchargements du {start} au {end} en UTC",
-        "packagesMethod": "Le classement compte les téléchargements PyPI de wheels portant un tag PyPy, toutes versions et plateformes confondues. Chaque essai installe la version fixée et ses dépendances depuis des wheels, puis importe le module indiqué. Un wheel manquant peut concerner le paquet ou l’une de ses dépendances.",
+        "packagesMethod": "Le classement compte les téléchargements PyPI de wheels portant un tag PyPy, toutes versions et plateformes confondues. Chaque essai installe la version fixée et ses dépendances depuis des wheels, puis importe le module indiqué. Un wheel manquant peut concerner le paquet ou l’une de ses dépendances. « Autre ABI seulement » signifie que la version publie des wheels pour cette version de Python et cette plateforme, mais compilés pour une autre ABI de l’interpréteur, par exemple PyPy 7.3 (pp73) au lieu de PyPy 8 (pp80).",
+        "packagesPassedOn": "Paquets importés sur {runtime}",
         "packagesEmpty": "Les essais de paquets n’ont pas été lancés pour ce rapport.",
         "package": "Paquet et module importé",
         "rank": "Rang",
         "downloads": "Téléchargements de wheels PyPy",
+        "applicationsTab": "Applications",
+        "applicationsEmpty": "Les essais applicatifs n’ont pas été lancés pour ce rapport.",
+        "applicationsPassedOn": "Scénarios réussis sur {runtime}",
+        "scenario": "Scénario",
+        "applicationTitles": {
+            "django-template": "Rendre un gabarit avec échappement automatique",
+            "django-sqlite": "Agréger des lignes après l’annulation d’une transaction SQLite",
+            "bottle-route": "Router une requête WSGI vers un gestionnaire JSON",
+            "numpy-array": "Découper des tableaux et résoudre un système linéaire"
+        },
         "commonTab": "Cas communs",
         "upstreamTab": "Tests CPython",
         "summaries": "Résultats par interpréteur",
@@ -125,14 +157,23 @@ TRANSLATIONS = {
         "passedOn": "Cas réussis sur {runtime}",
         "case": "Cas",
         "empty": "Aucun cas pour ces filtres.",
+        "noDifferences": "Aucun écart ni cas non mesuré. Décochez le filtre pour voir tous les cas.",
+        "observations": {
+            "raises": "Lève {exception}",
+            "unexpected": "Lève une exception inattendue : {exception}",
+            "returns": "Renvoie {value} ({type})",
+            "returnsNone": "Renvoie None"
+        },
         "allModules": "Tous les modules",
-        "noWheel": "Aucun binaire compatible",
         "descriptions": {
             "common": "Les mêmes appels sur chaque interpréteur. Chaque valeur ou exception est comparée à la référence CPython.",
+            "applications": "De petits scénarios avec des versions épinglées de Django, Bottle et NumPy, exécutés sur chaque interpréteur depuis des dossiers de wheels isolés.",
             "upstream": "Des méthodes de test sélectionnées dans le code source de CPython, exécutées sur CPython et PyPy."
         },
         "statuses": {
             "passed": "Réussi",
+            "noWheel": "Aucun wheel",
+            "otherAbi": "Autre ABI seulement",
             "different": "Différent",
             "missing": "API absente",
             "skipped": "Ignoré",
@@ -148,6 +189,7 @@ TRANSLATIONS = {
         },
         "totals": {
             "noWheel": ["wheel manquant", "wheels manquants"],
+            "otherAbi": ["wheel pour une autre ABI seulement", "wheels pour une autre ABI seulement"],
             "installError": ["échec de l’installation", "échecs de l’installation"],
             "installTimeout": ["installation trop longue", "installations trop longues"],
             "installerUnavailable": ["installateur indisponible", "installateur indisponible"],

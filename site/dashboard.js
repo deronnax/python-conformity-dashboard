@@ -41,7 +41,8 @@ function initializeDashboard() {
   stamp.textContent = date.format(new Date(stamp.dateTime));
 
   let moduleName = parameters.get("module") ?? "";
-  let differencesOnly = parameters.get("diff") === "1";
+  // Most cases pass, so the tables open on differences. ?diff=0 lists every case.
+  let differencesOnly = parameters.get("diff") !== "0";
   const tables = [...document.querySelectorAll("[data-comparison]")].map((panel) => ({
     controls: panel.querySelector(".filters"),
     module: panel.querySelector("[data-module-filter]"),
@@ -49,6 +50,7 @@ function initializeDashboard() {
     count: panel.querySelector("[data-case-count]"),
     rows: [...panel.querySelectorAll("[data-module]")],
     empty: panel.querySelector("[data-empty]"),
+    emptyMessage: panel.querySelector("[data-empty] td"),
   }));
 
   function filterRows() {
@@ -62,6 +64,8 @@ function initializeDashboard() {
         if (!row.hidden) visible += 1;
       }
       table.empty.hidden = visible !== 0;
+      const message = differencesOnly && !filter ? "differences" : "filtered";
+      table.emptyMessage.textContent = table.emptyMessage.dataset[message];
       table.count.textContent = `${visible} / ${table.rows.length} ${table.count.dataset.unit}`;
     }
   }
@@ -97,7 +101,7 @@ function initializeDashboard() {
       const target = new URL(link.href);
       target.hash = location.hash;
       if (moduleName) target.searchParams.set("module", moduleName);
-      if (differencesOnly) target.searchParams.set("diff", "1");
+      if (!differencesOnly) target.searchParams.set("diff", "0");
       location.assign(target);
     });
   }
