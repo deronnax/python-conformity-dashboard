@@ -1,4 +1,4 @@
-name: Conformité Python
+name: Python Conformity
 
 on:
   push:
@@ -13,7 +13,7 @@ permissions:
   contents: read
 
 jobs:
-  mesure:
+  measure:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -21,11 +21,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Récupérer les interpréteurs précompilés
+      - name: Download the prebuilt interpreters
         shell: bash
         run: |
           set -euo pipefail
-          runtimes="$RUNNER_TEMP/conformite"
+          runtimes="$RUNNER_TEMP/conformity"
           mkdir -p "$runtimes"
           cd "$runtimes"
 
@@ -50,25 +50,25 @@ jobs:
           extract bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d \
             https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython-src
 
-      - name: Tester le générateur et le harnais
+      - name: Test the generator and the harness
         shell: bash
         run: |
           set -euo pipefail
-          "$RUNNER_TEMP/conformite/cpython/bin/python3.11" -B -m unittest discover -s tests
+          "$RUNNER_TEMP/conformity/cpython/bin/python3.11" -B -m unittest discover -s tests
 
       - name: Compiler RustPython
         shell: bash
-        working-directory: ${{ runner.temp }}/conformite/rustpython-src
+        working-directory: ${{ runner.temp }}/conformity/rustpython-src
         run: |
           set -euo pipefail
           rustup toolchain install 1.99.0 --profile minimal
           cargo +1.99.0 build --release --locked --features freeze-stdlib --bin rustpython
 
-      - name: Mesurer et générer le dashboard
+      - name: Measure and generate the dashboard
         shell: bash
         run: |
           set -euo pipefail
-          runtimes="$RUNNER_TEMP/conformite"
+          runtimes="$RUNNER_TEMP/conformity"
           curl -fLsS --retry 3 --max-time 120 https://www.python.org/ftp/python/3.11.17/Python-3.11.17.tar.xz \
             -o "$runtimes/Python-3.11.17.tar.xz"
           # GitHub Pages replaces the site on each deployment, so the published
@@ -87,22 +87,22 @@ jobs:
             --packages \
             --source "$runtimes/Python-3.11.17.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Publier l’artefact du dashboard
+      - name: Upload the dashboard artifact
         if: ${{ !cancelled() && hashFiles('dist/index.html') != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: dashboard-conformite
+          name: dashboard-conformity
           path: dist/
           if-no-files-found: error
 
-      - name: Préparer la publication GitHub Pages
+      - name: Prepare the GitHub Pages upload
         if: ${{ success() && github.ref == 'refs/heads/main' }}
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: dist/
 
-  publier:
-    needs: mesure
+  publish:
+    needs: measure
     if: ${{ github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     permissions:
@@ -115,6 +115,6 @@ jobs:
       group: pages
       cancel-in-progress: false
     steps:
-      - name: Déployer sur GitHub Pages
+      - name: Deploy to GitHub Pages
         id: deploiement
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

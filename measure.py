@@ -48,9 +48,9 @@ def identify(executable, runtime, cwd):
     info = run(executable, "-c", "import sys; print(sys.implementation.name); print(sys.version)", cwd=cwd)
     name, _, version = info.stdout.strip().partition("\n")
     if info.returncode or name != IMPLEMENTATIONS.get(runtime, runtime) or not version:
-        raise ValueError(f"{executable} ne correspond pas à {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
+        raise ValueError(f"{executable} is not {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
     if runtime in ("cpython", "pypy") and version.split()[0] != CPYTHON_VERSION:
-        raise ValueError(f"{RUNTIME_NAMES[runtime]} doit cibler Python {CPYTHON_VERSION}, reçu {version.split()[0]}.")
+        raise ValueError(f"{RUNTIME_NAMES[runtime]} must target Python {CPYTHON_VERSION}, got {version.split()[0]}.")
     if runtime == "freethreaded" and "free-threading build" not in version:
         raise ValueError(f"{executable} n’est pas une version CPython sans GIL.")
     return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version}
@@ -63,7 +63,7 @@ def extract_tests(archive, directory):
     with archive.open("rb") as stream:
         actual = hashlib.file_digest(stream, "sha256").hexdigest()
     if actual != ARCHIVE_SHA256:
-        raise ValueError(f"L’empreinte de {archive} ne correspond pas à l’archive officielle.")
+        raise ValueError(f"The digest of {archive} does not match the official archive.")
     test_path = f"Python-{CPYTHON_VERSION}/Lib/test"
     with tarfile.open(archive) as source:
         members = [item for item in source.getmembers() if item.name.startswith(test_path + "/")]
@@ -256,17 +256,17 @@ def upstream_results(executables, tests, cwd):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--cpython", default=sys.executable, help=f"Binaire de référence {CPYTHON_VERSION}")
-    parser.add_argument("--pypy", default="pypy3.11", help=f"Binaire PyPy ciblant Python {CPYTHON_VERSION}")
-    parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
-    parser.add_argument("--rustpython", help="Binaire RustPython. Mesuré en performance et en threads seulement.")
-    parser.add_argument("--freethreaded", help="Binaire CPython 3.14 sans GIL. Ajouté au corpus commun si fourni.")
-    parser.add_argument("--history", type=Path, help="history.json d’une exécution précédente, complété par celle-ci")
-    parser.add_argument("--benchmarks", action="store_true", help="Chronométrer des noyaux de calcul et des charges de la bibliothèque standard")
-    parser.add_argument("--applications", action="store_true", help="Mesurer Django, Bottle et NumPy dans un dossier temporaire")
-    parser.add_argument("--packages", action="store_true", help="Tester l’installation et l’import des 50 paquets PyPy sélectionnés")
-    parser.add_argument("--source", type=Path, help=f"Archive officielle {ARCHIVE}, téléchargée si omise")
-    parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Dossier du site généré")
+    parser.add_argument("--cpython", default=sys.executable, help=f"Reference binary, Python {CPYTHON_VERSION}")
+    parser.add_argument("--pypy", default="pypy3.11", help=f"PyPy binary targeting Python {CPYTHON_VERSION}")
+    parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
+    parser.add_argument("--rustpython", help="RustPython binary. Measured for performance and threads only.")
+    parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
+    parser.add_argument("--history", type=Path, help="history.json from an earlier run, extended by this one")
+    parser.add_argument("--benchmarks", action="store_true", help="Time compute kernels and standard library workloads")
+    parser.add_argument("--applications", action="store_true", help="Run Django, Bottle and NumPy scenarios in a temporary directory")
+    parser.add_argument("--packages", action="store_true", help="Install and import the 50 most downloaded PyPI projects")
+    parser.add_argument("--source", type=Path, help=f"Official {ARCHIVE} archive, downloaded when omitted")
+    parser.add_argument("--output", type=Path, default=ROOT / "dist", help="Directory of the generated site")
     args = parser.parse_args()
 
     try:
@@ -276,7 +276,7 @@ def main():
             if command:
                 path = shutil.which(command)
                 if not path:
-                    raise ValueError(f"Binaire introuvable : {command}")
+                    raise ValueError(f"Binary not found: {command}")
                 executables[runtime] = os.path.abspath(path)
 
         with tempfile.TemporaryDirectory(prefix="python-conformity-") as temp:
@@ -300,14 +300,14 @@ def main():
             }
             generate(report, args.output, load_history(args.history) if args.history else [])
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
-        parser.exit(1, f"Mesure interrompue : {exc}\n")
+        parser.exit(1, f"Measurement aborted: {exc}\n")
 
-    print(f"{len(report['common'])} cas communs · {len(report['upstream'])} tests amont · {args.output / 'index.html'}")
+    print(f"{len(report['common'])} shared cases · {len(report['upstream'])} upstream tests · {args.output / 'index.html'}")
     for suite in ("common", "upstream", "applications"):
         for runtime in executables:
             outcomes = [row["outcomes"][runtime]["status"] for row in report[suite] if runtime in row["outcomes"]]
             if outcomes:
-                print(f"{suite} / {runtime}: {outcomes.count('passed')}/{len(outcomes)} réussis")
+                print(f"{suite} / {runtime}: {outcomes.count('passed')}/{len(outcomes)} passed")
     if report["packages"]:
         for runtime in report["packages"]["items"][0]["outcomes"]:
             counts = {}
