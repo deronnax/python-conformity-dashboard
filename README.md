@@ -24,11 +24,11 @@ Le rendu des deux pages et des tableaux est réalisé en Python avec la biblioth
 
 `--packages` ajoute les 50 projets qui totalisent le plus de téléchargements de wheels portant un tag PyPy entre le 26 octobre et le 24 novembre 2026 en UTC. [Le classement et sa requête ClickPy](pypy-packages.json) fixent aussi la version et le module à importer pour chaque projet. La version retenue est la dernière version stable non retirée dont les métadonnées acceptent Python 3.11 à la date de référence. Sur chaque interpréteur, pip installe cette version et ses dépendances depuis des wheels dans un dossier temporaire propre au test. Le test vérifie la version installée et l’import du module indiqué.
 
-`--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://formulae.brew.sh/formula/rustpython). `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
+`--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://github.com/RustPython/RustPython/releases/tag/0.6.0). Pour les essais SQLite, compiler RustPython avec `cargo build --release --locked --features freeze-stdlib,sqlite --bin rustpython` et utiliser `target/release/rustpython`. `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
 
 ## GitHub Actions
 
-Le workflow **Conformité Python** s’exécute sur Linux x86-64 à chaque push sur `main` et peut être lancé manuellement. Il télécharge les binaires précompilés de CPython, PyPy, GraalPy Community 25.5.5 et RustPython 0.6.0 (paquet Homebrew), puis vérifie leurs empreintes. Le lanceur GraalPy natif est autonome.
+Le workflow **Conformité Python** s’exécute sur Linux x86-64 à chaque push sur `main` et peut être lancé manuellement. Il télécharge les binaires précompilés de CPython, PyPy et GraalPy Community 25.5.5 et vérifie leurs empreintes. Il vérifie aussi l’empreinte de l’archive source de RustPython 0.6.0, puis compile l’interpréteur avec la bibliothèque standard intégrée et le module natif `_sqlite3`.
 
 Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décompresser l’archive puis ouvrir `index.html`. Le workflow active les essais applicatifs et les essais de paquets. Une incompatibilité observée est un résultat de mesure. Un échec de la référence CPython dans le corpus de la bibliothèque standard rend le job rouge et reste visible dans le rapport si celui-ci a pu être produit.
 
