@@ -126,6 +126,50 @@ class InterpreterTests(unittest.TestCase):
         self.assertIn(TRANSLATIONS["fr"]["gilDisabled"], pages["fr"])
 
 
+def benchmark_row(**medians):
+    outcomes = {}
+    for key, median in medians.items():
+        outcomes[key] = ({"status": "passed", "detail": "", "median": median, "min": median, "stdev": 0.0,
+                          "rounds": 5, "first": median * 2} if isinstance(median, float) else median)
+    return {"id": "nbody", "title": "N-body simulation", "titleFr": "Simulation à N corps", "outcomes": outcomes}
+
+
+class PerformancePageTests(unittest.TestCase):
+    def page(self, rows, language="en"):
+        pages, _ = render(report(benchmarks=rows))
+        return pages[language]
+
+    def test_shows_times_ratios_and_the_geometric_mean(self):
+        page = self.page([benchmark_row(cpython=2.0, pypy=0.5)])
+        self.assertIn('<span class="time">2 s</span><span class="ratio same">reference</span>', page)
+        self.assertIn('<span class="time">0.5 s</span><span class="ratio faster">4.0× faster</span>', page)
+        self.assertIn("×4", page)
+        self.assertIn("5 timed rounds", page)
+
+    def test_slower_results_and_french_decimals(self):
+        page = self.page([benchmark_row(cpython=1.0, pypy=2.5)], "fr")
+        self.assertIn('<span class="ratio slower">2,5 fois plus lent</span>', page)
+        self.assertIn('<span class="time">2,5 s</span>', page)
+
+    def test_failed_benchmarks_show_their_status(self):
+        page = self.page([benchmark_row(cpython=1.0, pypy={"status": "different", "detail": "Expected: 1"})])
+        self.assertIn('<span class="status different">Different</span>', page)
+
+    def test_a_report_without_benchmarks_says_so(self):
+        self.assertIn(TRANSLATIONS["en"]["performanceEmpty"], self.page([]))
+
+    def test_the_speed_chart_uses_a_logarithmic_scale(self):
+        earlier = snapshot(report(generatedAt="2026-11-18T05:00:00+00:00",
+                                  benchmarks=[benchmark_row(cpython=1.0, pypy=0.01)]))
+        pages, _ = render(report(benchmarks=[benchmark_row(cpython=1.0, pypy=0.05)]), [earlier])
+        page = pages["en"]
+        self.assertIn("Speed relative to CPython", page)
+        # PyPy is 100 times faster at most, so the scale spans x1 to x100 with a tick per decade.
+        for tick in ("×1", "×10", "×100"):
+            self.assertIn(f">{tick}</text>", page)
+        self.assertNotIn(">×0.1</text>", page)
+
+
 class HistoryPageTests(unittest.TestCase):
     def later(self, stamp, **extra):
         data = report(generatedAt=stamp, **extra)

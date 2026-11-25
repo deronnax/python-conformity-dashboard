@@ -50,8 +50,14 @@ button, select { font: inherit; color: inherit; cursor: pointer; }
 .scenario-title { display: block; color: var(--muted); }
 .package-detail > summary { list-style: none; }
 .package-detail > summary::-webkit-details-marker { display: none; }
-.package-detail > summary .status::after { content: "▸"; margin-inline-start: .35em; }
-.package-detail[open] > summary .status::after { content: "▾"; }
+.package-detail > summary .status::after, .package-detail > summary .ratio::after { content: "▸"; margin-inline-start: .35em; }
+.package-detail[open] > summary .status::after, .package-detail[open] > summary .ratio::after { content: "▾"; }
+.time { font-weight: 650; font-variant-numeric: tabular-nums; }
+.ratio { display: block; color: var(--muted); font-size: .85rem; }
+.ratio.faster { color: #205536; }
+.ratio.slower { color: #832d1a; }
+.subheading { margin: 1.1rem 0 .6rem; font-size: 1rem; }
+.result-table .package-detail pre { max-inline-size: 18rem; }
 .package-detail pre { margin: .45rem 0 0; max-inline-size: 28rem; max-block-size: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .7rem; }
 .summary-card { padding: .9rem; border: 1px solid var(--line); border-radius: .65rem; }
@@ -113,7 +119,7 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .speedup-cell { min-inline-size: 14rem; }
 .speedup { display: block; margin-top: .3rem; font-variant-numeric: tabular-nums; }
 .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 1.25rem; margin-top: 1rem; }
-.chart { position: relative; margin: 0; padding: .9rem 1rem; border: 1px solid var(--line); border-radius: .65rem; }
+.chart { position: relative; max-inline-size: 46rem; margin: 0; padding: .9rem 1rem; border: 1px solid var(--line); border-radius: .65rem; }
 .chart figcaption { font-weight: 650; }
 .legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: .4rem 0 .2rem; padding: 0; list-style: none; font-size: .85rem; color: var(--muted); }
 .chart svg { display: block; inline-size: 100%; block-size: auto; overflow: visible; }

@@ -15,7 +15,7 @@ permissions:
 jobs:
   mesure:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -82,6 +82,7 @@ jobs:
             --pypy "$runtimes/pypy/bin/pypy3.11" \
             --rustpython "$runtimes/rustpython-src/target/release/rustpython" \
             --graalpy "$runtimes/graalpy/bin/graalpy" \
+            --benchmarks \
             --applications \
             --packages \
             --source "$runtimes/Python-3.11.17.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"

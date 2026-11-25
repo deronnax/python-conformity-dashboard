@@ -9,6 +9,8 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from performance import geometric_means
+
 
 VERSION = 1
 LIMIT = 520  # about ten years of weekly runs
@@ -34,6 +36,7 @@ def snapshot(report):
             if outcomes:
                 counts[runtime["id"]] = dict(sorted(Counter(outcomes).items()))
         suites[suite] = {"total": len(listing), "runtimes": counts}
+    speeds = geometric_means(report.get("benchmarks") or [], [runtime["id"] for runtime in report["runtimes"]])
     runtimes = {}
     for runtime in report["runtimes"]:
         threads = runtime.get("threads") or {}
@@ -41,6 +44,7 @@ def snapshot(report):
             "name": runtime["name"],
             "build": runtime["version"].split()[0],
             "speedup": threads.get("speedup"),
+            "speed": round(speeds[runtime["id"]][0], 4) if runtime["id"] in speeds else None,
             "workers": threads.get("workers"),
             "cores": threads.get("cores"),
         }

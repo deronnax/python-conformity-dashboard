@@ -7,18 +7,21 @@ import re
 from collections import Counter
 from datetime import date, datetime, timedelta, timezone
 from html import escape
+from math import ceil, floor, log10
 from pathlib import Path
 from string import Template
 from urllib.parse import quote
 
 from dashboard_content import TRANSLATIONS
 from history import dump as dump_history, load as load_history, merge, snapshot
+from performance import geometric_means, speedup
 
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
 VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": "shared-cases",
-         "upstream": "cpython-tests", "interpreters": "interpreters", "history": "history"}
+         "upstream": "cpython-tests", "interpreters": "interpreters", "performance": "performance",
+         "history": "history"}
 OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
 
 
@@ -285,6 +288,85 @@ def render_interpreters(report, language, copy):
       </section>"""
 
 
+def number(value, language, digits=3):
+    text = f"{value:.{digits}g}"
+    if "e" in text:
+        text = f"{value:f}".rstrip("0").rstrip(".")
+    return text.replace(".", ",") if language == "fr" else text
+
+
+def ratio_text(ratio, language, copy):
+    if 0.95 <= ratio <= 1.05:
+        return copy["performanceSame"]
+    factor = ratio if ratio > 1 else 1 / ratio
+    text = f"{factor:.1f}" if factor < 10 else f"{factor:.0f}"
+    key = "performanceFaster" if ratio > 1 else "performanceSlower"
+    return copy[key].format(ratio=text.replace(".", ",") if language == "fr" else text)
+
+
+def benchmark_cell(row, runtime, language, copy):
+    outcome = row["outcomes"][runtime["id"]]
+    if outcome["status"] != "passed":
+        return detailed_badge(outcome, language, copy)
+    seconds = copy["performanceSeconds"].format(value=number(outcome["median"], language))
+    detail = copy["performanceDetail"].format(
+        median=number(outcome["median"], language), min=number(outcome["min"], language),
+        stdev=number(outcome["stdev"], language), rounds=outcome["rounds"], first=number(outcome["first"], language))
+    if runtime["id"] == "cpython":
+        comparison = copy["performanceReference"]
+        tone = "same"
+    else:
+        ratio = speedup(row, runtime["id"])
+        comparison = ratio_text(ratio, language, copy)
+        tone = "same" if 0.95 <= ratio <= 1.05 else ("faster" if ratio > 1 else "slower")
+    return (f'<details class="package-detail"><summary><span class="time">{escape(seconds)}</span>'
+            f'<span class="ratio {tone}">{escape(comparison)}</span></summary><pre>{escape(detail)}</pre></details>')
+
+
+def render_benchmarks(report, language, copy):
+    heading = f'<h2>{escape(copy["performanceTab"])}</h2>'
+    rows = report.get("benchmarks") or []
+    if not rows:
+        return (f'<section id="{VIEWS["performance"]}" data-dashboard-panel>'
+                f'{heading}<p class="description">{escape(copy["performanceEmpty"])}</p></section>')
+    runtimes = visible_runtimes(rows, report["runtimes"])
+    means = geometric_means(rows, [runtime["id"] for runtime in runtimes])
+    cards = []
+    for runtime in runtimes:
+        mean = means.get(runtime["id"])
+        if runtime["id"] == "cpython":
+            score, detail = "×1", copy["performanceReference"]
+        elif mean:
+            score = "×" + number(mean[0], language, 2)
+            detail = copy["performanceAll"] if mean[1] == len(rows) else copy["performanceMeanDetail"].format(
+                count=mean[1], total=len(rows))
+        else:
+            score, detail = "–", ""
+        build = runtime["version"].split()[0]
+        cards.append(f"""<article class="summary-card">
+            <p class="runtime-name" title="{escape(runtime["version"])}">{escape(runtime["name"])} {escape(build)}</p>
+            <p class="score">{escape(score)}</p><p class="summary-detail">{escape(detail)}</p>
+          </article>""")
+    listing = []
+    for row in rows:
+        title = row.get("titleFr", row["title"]) if language == "fr" else row["title"]
+        cells = "".join(f"<td>{benchmark_cell(row, runtime, language, copy)}</td>" for runtime in runtimes)
+        listing.append(f'<tr><th scope="row"><code>{escape(row["id"])}</code>'
+                       f'<span class="scenario-title">{escape(title)}</span></th>{cells}</tr>')
+    return f"""<section id="{VIEWS["performance"]}" data-dashboard-panel>
+        {heading}
+        <p class="description">{escape(copy["performanceMethod"])}</p>
+        <h3 class="subheading">{escape(copy["performanceMean"])}</h3>
+        <div class="summaries" aria-label="{escape(copy["summaries"])}">{"".join(cards)}</div>
+        <div class="table-scroll" role="region" aria-label="{escape(copy["performanceTab"])}" tabindex="0">
+          <table class="result-table">
+            {table_head((copy["performanceBenchmark"],), runtimes)}
+            <tbody>{"".join(listing)}</tbody>
+          </table>
+        </div>
+      </section>"""
+
+
 def css_token(value):
     return re.sub(r"[^a-z0-9-]", "", str(value).lower())
 
@@ -301,6 +383,12 @@ def history_series(entries, chart):
             for key, item in points.items():
                 label = f'×{item["speedup"]:g}'
                 series.setdefault(key, (item["name"], []))[1].append((moment, item["speedup"], label))
+        elif chart == "performance":
+            for key, item in entry["runtimes"].items():
+                if item.get("speed"):
+                    label = f'×{item["speed"]:.2g}'
+                    series.setdefault(key, (item["name"], []))[1].append((moment, item["speed"], label))
+                    top = max(top, item["speed"])
         elif chart in entry["suites"]:
             suite = entry["suites"][chart]
             top = max(top, suite["total"])
@@ -311,10 +399,17 @@ def history_series(entries, chart):
     return series, top
 
 
-def chart_ticks(top, chart):
+def chart_scale(series, top, chart):
+    """Return the tick list and the function that maps a value to a height fraction (0 bottom, 1 top)."""
+    if chart == "performance":
+        values = [value for _, points in series.values() for _, value, _ in points]
+        low, high = floor(log10(min(values))), ceil(log10(max(values)))
+        high = max(high, low + 1)
+        ticks = [(10 ** power, f"×{10 ** power:g}") for power in range(low, high + 1)]
+        return ticks, lambda value: (log10(value) - low) / (high - low)
     if chart == "threads":
-        return list(range(int(top) + 1))
-    return sorted({0, top // 2, top})
+        return [(tick, f"×{tick}") for tick in range(int(top) + 1)], lambda value: value / top
+    return [(tick, str(tick)) for tick in sorted({0, top // 2, top})], lambda value: value / top
 
 
 def render_chart(entries, chart, copy):
@@ -331,12 +426,13 @@ def render_chart(entries, chart, copy):
             return left + (width - left - right) / 2
         return left + (datetime.fromisoformat(moment).timestamp() - times[0]) / span * (width - left - right)
 
+    ticks, fraction = chart_scale(series, top, chart)
+
     def y(value):
-        return upper + (1 - value / top) * (height - upper - lower)
+        return upper + (1 - fraction(value)) * (height - upper - lower)
 
     parts = []
-    for tick in chart_ticks(top, chart):
-        label = f"×{tick}" if chart == "threads" else str(tick)
+    for tick, label in ticks:
         parts.append(f'<line class="grid" x1="{left}" x2="{width - right}" y1="{y(tick):.1f}" y2="{y(tick):.1f}"/>'
                      f'<text class="axis" x="{left - 8}" y="{y(tick) + 4:.1f}" text-anchor="end">{label}</text>')
     shown = moments if len(moments) <= 4 else [moments[0], moments[len(moments) // 3], moments[2 * len(moments) // 3], moments[-1]]
@@ -383,7 +479,8 @@ def render_chart(entries, chart, copy):
 
 
 def render_history(entries, copy):
-    charts = "".join(render_chart(entries, chart, copy) for chart in ("packages", "applications", "common", "threads"))
+    charts = "".join(render_chart(entries, chart, copy)
+                     for chart in ("packages", "applications", "common", "performance", "threads"))
     first = f'<p class="description">{escape(copy["historyFirst"])}</p>' if len(entries) < 2 else ""
     return f"""<section id="{VIEWS["history"]}" data-dashboard-panel>
         <h2>{escape(copy["historyTab"])}</h2>
@@ -414,6 +511,7 @@ def render_page(report, language, template, assets, history):
         packages=render_packages(report, language, copy),
         applications=render_applications(report, language, copy),
         interpreters=render_interpreters(report, language, copy),
+        performance=render_benchmarks(report, language, copy),
         history=render_history(history, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
