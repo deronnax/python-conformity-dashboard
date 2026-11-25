@@ -72,20 +72,26 @@ def extract_tests(archive, directory):
     return directory / test_path
 
 
-def result(status, detail=""):
-    return {"status": status, "detail": detail}
+def result(status, detail="", *, detail_fr=None):
+    outcome = {"status": status, "detail": detail}
+    if detail_fr is not None:
+        outcome["detailFr"] = detail_fr
+    return outcome
 
 
 def invoke(executable, runtime, *args, cwd):
     try:
         completed = run(executable, runtime, *args, cwd=cwd)
     except subprocess.TimeoutExpired:
-        return result("timeout", "Le processus a dépassé 30 secondes.")
+        return result("timeout", "The process exceeded 30 seconds.", detail_fr="Le processus a dépassé 30 secondes.")
     except OSError as exc:
         return result("blocked", str(exc))
     if completed.returncode:
-        detail = completed.stderr.strip() or completed.stdout.strip() or f"Code {completed.returncode}"
-        return result("crash" if completed.returncode < 0 else "blocked", detail)
+        status = "crash" if completed.returncode < 0 else "blocked"
+        detail = completed.stderr.strip() or completed.stdout.strip()
+        if detail:
+            return result(status, detail)
+        return result(status, f"Exit code {completed.returncode}", detail_fr=f"Code de sortie {completed.returncode}")
     return completed.stdout.strip()
 
 
@@ -132,14 +138,20 @@ else:
     if kind == "exception":
         return f"exception: {payload}"
     if kind == "unexpected-exception":
-        return f"exception inattendue: {payload}"
+        return f"unexpected exception: {payload}"
     if kind == "value":
         value_type, _, value = payload.partition(" ")
         try:
             return f"{value_type}: {ast.literal_eval(value)!r}"
         except (ValueError, SyntaxError):
             pass
-    return result("blocked", f"Sortie illisible du processus : {output}")
+    return result("blocked", f"Unreadable process output: {output}", detail_fr=f"Sortie illisible du processus : {output}")
+
+
+def french_observation(observation):
+    if observation.startswith("unexpected exception: "):
+        return observation.replace("unexpected exception: ", "exception inattendue : ", 1)
+    return observation
 
 
 def comparisons(executables, cwd):
@@ -153,11 +165,15 @@ def comparisons(executables, cwd):
                 outcome = observation
             elif baseline != probe.expected:
                 status = "blocked" if runtime == "cpython" else "unverified"
-                outcome = result(status, f"Attendu dans le corpus : {probe.expected}\nObservé : {observation}")
+                outcome = result(status, f"Expected by the corpus: {probe.expected}\nObserved: {observation}",
+                                 detail_fr=f"Attendu dans le corpus : {probe.expected}\nObservé : {french_observation(observation)}")
             else:
-                outcome = result("passed" if observation == baseline else "different", observation)
+                translated = french_observation(observation)
+                outcome = result("passed" if observation == baseline else "different", observation,
+                                 detail_fr=translated if translated != observation else None)
             outcomes[runtime] = outcome
         rows.append({"id": probe.id, "module": probe.module, "api": probe.api, "title": probe.title,
+                     "titleFr": probe.title_fr,
                      "code": probe.expression.replace("api(", probe.api + "("), "source": source_url(probe.upstream),
                      "sourceTest": probe.upstream, "outcomes": outcomes})
     return rows
@@ -177,7 +193,8 @@ def upstream_results(executables, tests, cwd):
                     outcomes[runtime] = result("blocked", observation)
             if outcomes["cpython"]["status"] != "passed":
                 observed = outcomes["pypy"]
-                outcomes["pypy"] = result("unverified", f"État observé : {observed['status']}\n{observed['detail']}")
+                outcomes["pypy"] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
+                                          detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
                          "source": source_url(method), "sourceTest": method, "outcomes": outcomes})
     return rows

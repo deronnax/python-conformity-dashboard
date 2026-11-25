@@ -14,6 +14,8 @@ open dist/index.html  # macOS
 
 La commande télécharge l’archive source officielle de CPython, vérifie son SHA-256 et extrait uniquement `Lib/test` dans un dossier temporaire. `--source /chemin/vers/Python-3.11.17.tar.xz` réutilise une archive déjà téléchargée. La page s’ouvre directement à partir des fichiers générés dans `dist/`. `dist/results.json` contient les résultats détaillés.
 
+Le dashboard s’affiche en anglais par défaut et en français si c’est la première langue prise en charge dans les préférences du navigateur. Le menu de langue permet de choisir une autre langue et mémorise ce choix.
+
 `--micropython /chemin/vers/micropython` ajoute le [port Unix précompilé](https://formulae.brew.sh/formula/micropython). `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
 
 ## GitHub Actions
