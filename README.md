@@ -1,6 +1,6 @@
 # Conformité Python
 
-[Dashboard public](https://deronnax.github.io/python-conformity/)
+[Dashboard public](https://deronnax.github.io/python-conformity-dashboard/)
 
 Ce tableau de bord compare des comportements observables de la bibliothèque standard à CPython 3.11.17. Le corpus couvre 17 modules. Il comprend notamment des transactions SQLite, des threads qui ajoutent à une même liste, des flux zlib partiels, des groupes de tâches asynchrones, des transitions de fuseau horaire et des expressions régulières atomiques.
 
