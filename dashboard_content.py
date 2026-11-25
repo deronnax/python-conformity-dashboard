@@ -74,7 +74,7 @@ TRANSLATIONS = {
         "performanceOnly": "RustPython is not tested here. It provides no C API, so extension modules cannot load on it and these results would mostly measure that. It appears in the Interpreters and Performance views.",
         "methodology": "Methodology and scope",
         "methodCases": "Shared cases compare observed types and values with CPython. For invalid inputs, they check whether callers can catch the exception using the expected public class.",
-        "methodUpstream": "The CPython tests view runs selected upstream test methods on CPython and PyPy. The JSON test harness enables the CPython accelerator when available. Shared cases import the module as usual.",
+        "methodUpstream": "The CPython tests view runs selected upstream test methods on CPython, PyPy and GraalPy. The JSON test harness enables the CPython accelerator when available. Shared cases import the module as usual.",
         "methodScope": "These results apply to the cases, versions and platform shown. The shared cases cover APIs available in CPython 3.12. A module can be unavailable in a specific build. Each row links to the source test.",
         "reference": "CPython reference",
         "source": "View source test",
@@ -92,7 +92,7 @@ TRANSLATIONS = {
         "descriptions": {
             "common": "Each interpreter runs the same calls. Values and exceptions are compared with the CPython reference.",
             "applications": "Small scenarios with pinned releases of Django, Bottle and NumPy, run on each interpreter from isolated wheel directories.",
-            "upstream": "Selected test methods from the CPython source tree, run on CPython and PyPy."
+            "upstream": "Selected test methods from the CPython source tree, run on CPython, PyPy and GraalPy."
         },
         "statuses": {
             "passed": "Passed",
@@ -226,7 +226,7 @@ TRANSLATIONS = {
         "performanceOnly": "RustPython n’est pas testé ici. Il n’offre aucune API C : les modules d’extension ne peuvent pas s’y charger et ces résultats mesureraient surtout cela. Il figure dans les vues Interpréteurs et Performance.",
         "methodology": "Méthode et périmètre",
         "methodCases": "Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on vérifie que le code appelant peut intercepter l’exception avec la classe publique attendue.",
-        "methodUpstream": "La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython et PyPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.",
+        "methodUpstream": "La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython, PyPy et GraalPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.",
         "methodScope": "Les résultats portent sur ces cas, ces versions et cette plateforme. Les cas communs couvrent des API disponibles dans CPython 3.12. Un module peut être absent d’un binaire donné. Chaque ligne donne accès à son cas source.",
         "reference": "Référence CPython",
         "source": "Voir le test source",
@@ -244,7 +244,7 @@ TRANSLATIONS = {
         "descriptions": {
             "common": "Les mêmes appels sur chaque interpréteur. Chaque valeur ou exception est comparée à la référence CPython.",
             "applications": "De petits scénarios avec des versions épinglées de Django, Bottle et NumPy, exécutés sur chaque interpréteur depuis des dossiers de wheels isolés.",
-            "upstream": "Des méthodes de test sélectionnées dans le code source de CPython, exécutées sur CPython et PyPy."
+            "upstream": "Des méthodes de test sélectionnées dans le code source de CPython, exécutées sur CPython, PyPy et GraalPy."
         },
         "statuses": {
             "passed": "Réussi",

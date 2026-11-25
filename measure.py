@@ -34,6 +34,8 @@ RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "ru
 # Measured for speed and thread scaling only: RustPython has no C API, so it cannot
 # run extension modules and the conformity suites would mostly measure that.
 PERFORMANCE_ONLY = {"rustpython"}
+# Interpreters that run the CPython tests: the ones targeting the same Python version.
+UPSTREAM_RUNTIMES = ("cpython", "pypy", "graalpy")
 # sys.implementation.name reported by each runtime id.
 IMPLEMENTATIONS = {"freethreaded": "cpython"}
 
@@ -236,11 +238,13 @@ def benchmark_results(executables, cwd):
 
 
 def upstream_results(executables, tests, cwd):
+    """Run the selected CPython test methods on the interpreters that target the same Python version."""
+    runtimes = [runtime for runtime in UPSTREAM_RUNTIMES if runtime in executables]
     rows = []
     for module, methods in UPSTREAM.items():
         for method in methods:
             outcomes = {}
-            for runtime in ("cpython", "pypy"):
+            for runtime in runtimes:
                 observation = invoke(executables[runtime], str(ROOT / "upstream.py"),
                                      str(tests.parent), method, cwd=cwd)
                 try:
@@ -248,9 +252,10 @@ def upstream_results(executables, tests, cwd):
                 except ValueError:
                     outcomes[runtime] = result("blocked", observation)
             if outcomes["cpython"]["status"] != "passed":
-                observed = outcomes["pypy"]
-                outcomes["pypy"] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
-                                          detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
+                for runtime in runtimes[1:]:
+                    observed = outcomes[runtime]
+                    outcomes[runtime] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
+                                               detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
                          "source": source_url(method), "sourceTest": method, "outcomes": outcomes})
     return rows
