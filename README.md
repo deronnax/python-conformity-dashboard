@@ -2,15 +2,17 @@
 
 [Public dashboard](https://deronnax.github.io/python-conformity-dashboard/)
 
-This dashboard compares observable behavior of the standard library with CPython 3.12.15. The corpus covers 17 modules. It includes SQLite transactions, threads appending to one list, partial zlib streams, asyncio task groups, time zone transitions and atomic regular expressions.
+This dashboard compares observable behavior of the standard library across Python implementations, one Python version at a time. Python 3.12 is measured against CPython 3.12.15 and shown at the site root; Python 3.11 is measured against CPython 3.11.17 and shown under `/3.11/`. A switch at the top of the page moves between them. In each version, CPython, PyPy and GraalPy all implement that version, so a difference is never a version difference. The corpus covers 17 modules. It includes SQLite transactions, threads appending to one list, partial zlib streams, asyncio task groups, time zone transitions and atomic regular expressions.
 
 ## Local measurement
 
-Use a [prebuilt CPython 3.12.15](https://github.com/astral-sh/python-build-standalone/releases/tag/20261021) and [PyPy 8.0.1 for Python 3.12](https://doc.pypy.org/release-v8.0.1.html) and, to include it, [GraalPy 25.2.4 for Python 3.12](https://github.com/oracle/graalpython/releases/tag/graal-25.2.4). There are no Python dependencies to install.
+Use a [prebuilt CPython](https://github.com/astral-sh/python-build-standalone/releases/tag/20261021) of the version to measure (3.12.15 or 3.11.17), [PyPy 8.0.1](https://doc.pypy.org/release-v8.0.1.html) for the same version and, to include it, GraalPy for the same version: [25.2.4 for Python 3.12](https://github.com/oracle/graalpython/releases/tag/graal-25.2.4) or [24.2.2 for Python 3.11](https://github.com/oracle/graalpython/releases/tag/graal-24.2.2), the last release that implements 3.11. There are no Python dependencies to install.
 
 ```sh
-/path/to/python3.12 -B measure.py \
+/path/to/python3.12 -B measure.py --reference 3.12 \
   --pypy /path/to/pypy3.12
+/path/to/python3.11 -B measure.py --reference 3.11 \
+  --pypy /path/to/pypy3.11 --output dist/3.11
 open dist/index.html  # macOS
 ```
 
@@ -22,7 +24,7 @@ Python renders both pages and all tables with the standard library. The browser 
 
 `--applications` downloads pinned distributions of Django 5.2.19, Bottle 0.13.4 and NumPy 2.4.4 into the temporary directory. It checks their digests and extracts them for import, leaving installed environments alone. The NumPy scenario checks the native extension suffix the interpreter expects on Linux x86-64. Only CPython and CPython 3.14t have a pinned NumPy wheel: PyPI has none for PyPy 3.12, and Oracle's GraalPy wheels do not cover GraalPy 25.2 on Python 3.12. The other interpreters report "No wheel". The scenarios cover Django template rendering, an aggregate with a rolled-back SQLite transaction, a Bottle WSGI route and NumPy operations. Their results appear in the Applications tab.
 
-`--packages` adds the 50 most downloaded PyPI projects between 26 October and 24 November 2026 UTC, all file types included. [The ranking and its ClickPy query](pypi-packages.json) also fix the version and the module to import for each project. `python3.12 update_ranking.py` regenerates this file. The chosen version is the newest stable, non-yanked release whose metadata accepts Python 3.12 at the reference date. On each interpreter, pip installs that version and its dependencies from wheels with `--prefix` into a temporary directory private to the test. Unlike `--target`, this option lets pip see the packages bundled with the interpreter, such as cffi on PyPy. The test checks the installed version and imports the named module. When no wheel suits the package itself, the harness queries PyPI. If the release publishes wheels for the same interpreter tag and platform but another ABI, for example `pypy312_pp73` when PyPy 8 requires `pypy312_pp80`, the result is "Other ABI only" rather than "No wheel".
+`--packages` adds the 50 most downloaded PyPI projects between 26 October and 24 November 2026 UTC, all file types included. [The ranking and its ClickPy query](pypi-packages-3.12.json) also fix the version and the module to import for each project. Each Python version has its own ranking file ([3.11](pypi-packages-3.11.json)): the projects are the same, the releases are chosen for that version. `python3.12 update_ranking.py` regenerates the 3.12 file and `python3.11 update_ranking.py` the 3.11 one. The chosen version is the newest stable, non-yanked release whose metadata accepts that Python version at the reference date. On each interpreter, pip installs that version and its dependencies from wheels with `--prefix` into a temporary directory private to the test. Unlike `--target`, this option lets pip see the packages bundled with the interpreter, such as cffi on PyPy. The test checks the installed version and imports the named module. When no wheel suits the package itself, the harness queries PyPI. If the release publishes wheels for the same interpreter tag and platform but another ABI, for example `pypy312_pp73` when PyPy 8 requires `pypy312_pp80`, the result is "Other ABI only" rather than "No wheel".
 
 `--rustpython /path/to/rustpython` adds a [RustPython binary](https://github.com/RustPython/RustPython/releases/tag/0.6.0), measured for performance and threads only. It provides no C API, so the shared cases, packages, applications and CPython tests do not apply to it. To build it, run `cargo build --release --locked --features freeze-stdlib --bin rustpython` and use `target/release/rustpython`. `--graalpy /path/to/graalpy` adds the [standalone GraalPy binary](https://github.com/oracle/graalpython/releases/tag/graal-25.2.4). The two options are independent. `--freethreaded /path/to/python3.14t` adds a [free-threaded CPython 3.14](https://github.com/astral-sh/python-build-standalone/releases/tag/20261021). The script rejects a binary that is not a free-threaded build.
 
@@ -38,11 +40,11 @@ The tests in `tests/test_performance.py` check the kernels against published val
 
 ## History
 
-Each run adds a compact snapshot (counts per status, interpreter and view, relative speed) to `history.json`. GitHub Pages replaces the whole site on every deployment, so the workflow downloads the published `history.json`, adds its snapshot and publishes it again. `--history path/to/history.json` does the same locally. A missing or unreadable file starts a new history. The **History** tab draws one line per interpreter, with a table view of the same values.
+Each run adds a compact snapshot (counts per status, interpreter and view, relative speed) to `history.json`. GitHub Pages replaces the whole site on every deployment, so the workflow downloads the published `history.json` of each version, adds its snapshot and publishes it again. `--history path/to/history.json` does the same locally; it can be repeated, and only snapshots measured against the same Python version are kept. A missing or unreadable file starts a new history. The **History** tab draws one line per interpreter, with a table view of the same values.
 
 ## GitHub Actions
 
-The **Python Conformity** workflow runs on Linux x86-64 on every push to `main`, every Monday and on demand. It first runs the unit tests with the downloaded CPython. It downloads the prebuilt binaries of CPython, free-threaded CPython 3.14, PyPy and GraalPy Community 25.2.4 and checks their digests. The CPython digests come from the `SHA256SUMS` file of the release. It also checks the digest of the RustPython 0.6.0 source archive, then builds the interpreter with the bundled standard library.
+The **Python Conformity** workflow runs on Linux x86-64 on every push to `main`, every Monday and on demand. It measures each Python version in its own job, in parallel, then assembles the two dashboards into one site. Each job first runs the unit tests with the downloaded CPython. It downloads the prebuilt binaries of CPython, PyPy and GraalPy Community for its version and checks their digests. The Python 3.12 job also measures the free-threaded CPython 3.14 and RustPython, which implement Python 3.14. The CPython digests come from the `SHA256SUMS` file of the release. It also checks the digest of the RustPython 0.6.0 source archive, then builds the interpreter with the bundled standard library.
 
 In the run summary, download `dashboard-conformity`, unzip the archive and open `index.html`. The workflow enables the application and package scenarios. An observed incompatibility is a measurement result. A failure of the CPython reference in the standard library corpus turns the job red and stays visible in the report when it could be produced.
 
@@ -51,7 +53,7 @@ On `main`, a successful measurement is then published to GitHub Pages by the `pu
 ## Tests
 
 ```sh
-python3.12 -B -m unittest discover -s tests
+python3.12 -B -m unittest discover -s tests  # also runs with python3.11
 ```
 
 The tests cover page generation from a fictional report, the classification of missing wheels, and the choice of ranking versions and modules. They do not use the network.
@@ -65,7 +67,7 @@ The tests cover page generation from a fictional report, the classification of m
 - **Versions**. Each run records, for every interpreter, its own release (`implementationVersion`, such as PyPy 8.0.1), the Python version it implements (`language`, such as 3.12.15), its cache tag and its full `sys.version`. When an interpreter implements another minor version than the reference, as CPython 3.14t does, its column and summary say so, because a difference can come from the version.
 - **Differences first**. The shared cases and CPython tests tables initially show only differences and unmeasured cases. Unchecking the filter or adding `?diff=0` to the address shows every case.
 - **CPython tests**. The bodies of the selected tests run on CPython, PyPy and GraalPy with each binary's own standard library. A guard in the JSON harness lets the selected methods load when the CPython `_json` accelerator is absent. Tests of internal optimizations and of the C API are out of scope. [CPython v3.12.15 sources](https://github.com/python/cpython/tree/v3.12.15/Lib/test)
-- **Scope**. The shared cases cover public CPython 3.12 APIs and apply to the binaries and platforms shown. GraalPy 25.2.4 targets Python 3.12, like PyPy 8.0.1. CPython 3.14t is the free-threaded build and targets 3.14. The RustPython 0.6.0 binary announces Python 3.14 alpha and appears only in the Interpreters and Performance views. Optional modules depend on each binary's configuration. [GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.2.4) · [RustPython](https://rustpython.github.io/docs/getting_started/installation.html)
+- **Scope**. The shared cases cover public CPython APIs of the measured version and apply to the binaries and platforms shown. GraalPy 25.2.4 and PyPy 8.0.1 implement Python 3.12; GraalPy 24.2.2 and PyPy 8.0.1 implement Python 3.11. The contracts link to the documentation of the measured version. CPython 3.14t is the free-threaded build and targets 3.14. The RustPython 0.6.0 binary announces Python 3.14 alpha and appears only in the Interpreters and Performance views. Optional modules depend on each binary's configuration. [GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.2.4) · [RustPython](https://rustpython.github.io/docs/getting_started/installation.html)
 
 ## License
 

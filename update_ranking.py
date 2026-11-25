@@ -18,6 +18,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 import package_bench
+from references import REFERENCES
 from applications import prepare
 
 
@@ -132,11 +133,16 @@ def detect_modules(project, version, executable, root, pip):
         return json.loads(found.stdout.splitlines()[-1])
 
 
+# The ranking is resolved for the Python version of the interpreter running this
+# script, which also installs each release to find its module.
+PYTHON = f"{sys.version_info.major}.{sys.version_info.minor}"
+
+
 def resolve(entry, cutoff, executable, root, pip):
     project = entry["project"]
-    version = choose_version(release_files(project), cutoff)
+    version = choose_version(release_files(project), cutoff, PYTHON)
     if version is None:
-        raise RuntimeError(f"{project}: no stable wheel for Python 3.12 before {cutoff}")
+        raise RuntimeError(f"{project}: no stable wheel for Python {PYTHON} before {cutoff}")
     module = choose_module(project, detect_modules(project, version, executable, root, pip))
     return {**entry, "version": version, "module": module}
 
@@ -146,8 +152,12 @@ def main():
     parser.add_argument("--end", type=date.fromisoformat, default=date.today(), help="First day left out of the window")
     parser.add_argument("--days", type=int, default=30)
     parser.add_argument("--limit", type=int, default=50)
-    parser.add_argument("--output", type=Path, default=package_bench.RANKING)
+    parser.add_argument("--output", type=Path, help="Defaults to the ranking of this interpreter's Python version")
     arguments = parser.parse_args()
+    if arguments.output is None:
+        if PYTHON not in REFERENCES:
+            parser.error(f"Python {PYTHON} is not a measured version. Run this script with one of {', '.join(REFERENCES)}.")
+        arguments.output = REFERENCES[PYTHON].ranking
     start = arguments.end - timedelta(days=arguments.days)
     query, projects = ranking(start, arguments.end, arguments.limit)
     with tempfile.TemporaryDirectory(prefix="update-ranking-") as temporary:

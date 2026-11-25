@@ -33,22 +33,6 @@ BOTTLE = (
     Wheel(PYPI + "83/f6/b55ec74cfe68c6584163faa311503c20b0da4c09883a41e8e00d6726c954/bottle-0.13.4-py2.py3-none-any.whl",
           "045684fbd2764eac9cdeb824861d1551d113e8b683d8d26e296898d3dd99a12e"),
 )
-# PyPI publishes NumPy 2.4.4 for PyPy 3.11 only, and Oracle publishes GraalPy wheels
-# for the 25.0 ABI on Python 3.12, not for the 25.2 release tested here. An
-# interpreter without an entry has no pinned wheel and reports "No wheel".
-NUMPY = {
-    "cpython": Wheel(
-        PYPI + "0a/0d/0e3ecece05b7a7e87ab9fb587855548da437a061326fff64a223b6dcb78a/"
-        "numpy-2.4.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-        "81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e",
-    ),
-    "freethreaded": Wheel(
-        PYPI + "5f/86/2acbda8cc2af5f3d7bfc791192863b9e3e19674da7b5e533fded124d1299/"
-        "numpy-2.4.4-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-        "b268594bccac7d7cf5844c7732e3f20c50921d94e36d7ec9b79e9857694b1b2f",
-    ),
-}
-
 CHECKS = (
     ("django-template", "Django", "5.2.19", DJANGO),
     ("django-sqlite", "Django", "5.2.19", DJANGO),
@@ -88,7 +72,8 @@ def numpy_outcome(executable, site, wheel, invoke, directory):
     return None
 
 
-def application_results(executables, directory, invoke):
+def application_results(executables, directory, invoke, numpy):
+    """Run each scenario. numpy maps an interpreter to its pinned NumPy wheel."""
     prepared = {}
     results = []
     for name, package, version, wheels in CHECKS:
@@ -98,10 +83,10 @@ def application_results(executables, directory, invoke):
             if native and (platform.system(), platform.machine()) != ("Linux", "x86_64"):
                 outcomes[runtime] = {"status": "skipped", "detail": "Linux x86-64"}
                 continue
-            if native and runtime not in NUMPY:
+            if native and runtime not in numpy:
                 outcomes[runtime] = {"status": "noWheel", "detail": ""}
                 continue
-            dependencies = (NUMPY[runtime],) if native else wheels
+            dependencies = (numpy[runtime],) if native else wheels
             if dependencies not in prepared:
                 target = directory / f"application-wheels-{len(prepared)}"
                 try:

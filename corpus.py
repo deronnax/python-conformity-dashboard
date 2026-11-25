@@ -2,9 +2,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-CPYTHON_VERSION = "3.12.15"
-SOURCE_ROOT = f"https://github.com/python/cpython/blob/v{CPYTHON_VERSION}/Lib/"
-DOCS_ROOT = "https://docs.python.org/{}/library/".format(CPYTHON_VERSION.rpartition(".")[0])
+from references import DEFAULT, REFERENCES
+
 
 # What guarantees the expected result of a shared case:
 # - language_spec: the Python language reference.
@@ -36,10 +35,10 @@ class Probe:
     def contract(self):
         return CONTRACTS.get(self.id, ("unclassified", None))[0]
 
-    @property
-    def contract_source(self):
+    def contract_source(self, reference=REFERENCES[DEFAULT]):
+        """The paragraph of the reference version's documentation that states the expected result."""
         anchor = CONTRACTS.get(self.id, ("unclassified", None))[1]
-        return DOCS_ROOT + anchor if anchor else None
+        return reference.docs_root + anchor if anchor else None
 
 
 PROBES = (
@@ -496,7 +495,7 @@ PROBES = (
 )
 
 
-# Documentation that states each expected result, relative to DOCS_ROOT. A case
+# Documentation that states each expected result, relative to the library documentation root. A case
 # stays unclassified when the documentation is silent or ambiguous about it.
 CONTRACTS = {
     "json-empty": ("stdlib_spec", "json.html#json-to-py-table"),
@@ -715,10 +714,10 @@ def test_line(test_id, lib):
     return None
 
 
-def source_url(test_id, lib=None):
+def source_url(test_id, lib=None, reference=REFERENCES[DEFAULT]):
     """Immutable link to an upstream test: the release tag, and the method line when known."""
     if test_id is None:
         return None
     path = test_location(test_id)[0]
     line = test_line(test_id, lib) if lib else None
-    return SOURCE_ROOT + path + (f"#L{line}" if line else "")
+    return reference.source_root + path + (f"#L{line}" if line else "")
