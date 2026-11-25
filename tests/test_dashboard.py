@@ -1,5 +1,6 @@
 import copy
 import json
+from html import escape
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -102,7 +103,7 @@ class GenerateTests(unittest.TestCase):
         self.assertIn(TRANSLATIONS["en"]["applicationsEmpty"], pages["en"])
         self.assertIn(TRANSLATIONS["fr"]["packagesEmpty"], pages["fr"])
 
-    def test_rustpython_is_left_out_of_the_package_view_only(self):
+    def test_rustpython_appears_in_every_view(self):
         data = report()
         data["runtimes"].append({"id": "rustpython", "name": "RustPython", "version": "3.14.0 (RustPython 0.6.0)",
                                  "language": "3.14.0a0", "implementationVersion": "0.6.0a0",
@@ -111,18 +112,17 @@ class GenerateTests(unittest.TestCase):
         for suite in ("common", "upstream", "applications"):
             for row in data[suite]:
                 row["outcomes"]["rustpython"] = passed()
+        data["packages"]["items"][0]["outcomes"]["rustpython"] = {"status": "nativeOnly", "detail": ""}
         data["benchmarks"] = [benchmark_row(cpython=1.0, pypy=0.2, rustpython=3.3)]
         pages, _ = render(data)
         for language in ("en", "fr"):
             page = pages[language]
             note = TRANSLATIONS[language]["performanceOnly"]
-            for view in ("shared-cases", "cpython-tests", "applications", "performance", "interpreters"):
+            for view in ("pypi-packages", "shared-cases", "cpython-tests", "applications", "performance", "interpreters"):
                 panel = page.split(f'<section id="{view}"')[1].split("</section>")[0]
                 self.assertIn("RustPython", panel)
-                self.assertNotIn(note, panel)
-            packages = page.split('<section id="pypi-packages"')[1].split("</section>")[0]
-            self.assertNotIn("RustPython", packages.split("<table", 1)[1])
-            self.assertIn(note, packages)
+                self.assertEqual(note in panel, view == "pypi-packages")
+            self.assertIn(TRANSLATIONS[language]["statuses"]["nativeOnly"], page)
 
     def test_accepts_package_reports_without_wheel_tags(self):
         data = report()
@@ -201,6 +201,51 @@ class VersionSwitchTests(unittest.TestCase):
     def test_a_single_version_has_no_switch(self):
         pages, _ = render(report())
         self.assertNotIn("data-version-link", pages["en"])
+
+
+class BlockerTests(unittest.TestCase):
+    def test_packages_blocked_by_a_dependency_name_it(self):
+        data = report()
+        item = data["packages"]["items"][0]
+        item["outcomes"]["pypy"] = {"status": "dependency", "detail": "ERROR: No matching distribution found for rpds-py>=0.25.0",
+                                    "blocker": {"name": "rpds-py", "requirement": "rpds-py>=0.25.0", "version": "2026.9.1",
+                                                "cause": "otherAbi", "published": ["pypy312_pp73"]}}
+        pages, _ = render(data)
+        for language in ("en", "fr"):
+            copy = TRANSLATIONS[language]
+            self.assertIn(copy["statuses"]["dependency"], pages[language])
+            self.assertIn(copy["blockersTitle"], pages[language])
+            self.assertIn(copy["blockerPublished"].format(name="rpds-py 2026.9.1", published="pypy312_pp73"),
+                          pages[language].replace("&#x27;", "'"))
+        self.assertIn('<span class="blocker">via <code>rpds-py</code></span>', pages["en"])
+
+    def test_no_blockers_no_table(self):
+        pages, _ = render(report())
+        self.assertNotIn(TRANSLATIONS["en"]["blockersTitle"], pages["en"])
+
+
+class DeepLinkTests(unittest.TestCase):
+    def test_rows_have_stable_anchors_and_permalinks(self):
+        pages, _ = render(report())
+        page = pages["en"]
+        for fragment in ("case-mmap-memoryview", "test-test.test_json.test.test_empty", "package-lxml",
+                         "scenario-numpy-array"):
+            self.assertIn(f'id="{fragment}"', page)
+            self.assertIn(f'href="#{fragment}"', page)
+
+    def test_cases_copy_a_standalone_reproduction(self):
+        data = report()
+        data["common"][0]["code"] = "import mmap\n\nregion = mmap.mmap(-1, 4)\nview = memoryview(region)\nregion.close()"
+        pages, _ = render(data)
+        script = ("# Python Conformity: mmap-memoryview\n# CPython 3.12.15: Raises BufferError\nimport mmap\n\n"
+                  "region = mmap.mmap(-1, 4)\nview = memoryview(region)\nprint(repr(region.close()))\n")
+        self.assertIn(f'data-copy="{escape(script)}"', pages["en"])
+
+    def test_packages_copy_the_install_and_import_commands(self):
+        pages, _ = render(report())
+        command = 'python -m pip install --only-binary=:all: lxml==6.1.3\npython -c "import lxml.etree"\n'
+        self.assertIn(f'data-copy="{escape(command)}"', pages["fr"])
+        self.assertIn(TRANSLATIONS["fr"]["copyReproduction"], pages["fr"])
 
 
 class InterpreterTests(unittest.TestCase):

@@ -29,9 +29,9 @@ from references import DEFAULT, REFERENCES
 ROOT = Path(__file__).resolve().parent
 RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
                  "freethreaded": "CPython 3.14t"}
-# Left out of the package ranking for now: RustPython has no C API, so packages
-# with extension modules cannot load on it.
-NO_PACKAGES = {"rustpython"}
+# RustPython has no C API, so packages with extension modules cannot load on it.
+# It is tested only on releases that publish a pure-Python wheel.
+PURE_PYTHON_ONLY = {"rustpython"}
 # Interpreters that run the CPython tests. RustPython implements another Python
 # version; its column says so.
 UPSTREAM_RUNTIMES = ("cpython", "pypy", "graalpy", "rustpython")
@@ -327,7 +327,7 @@ def main():
     parser.add_argument("--cpython", default=sys.executable, help="Reference CPython binary of that version")
     parser.add_argument("--pypy", help="PyPy binary implementing that version")
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
-    parser.add_argument("--rustpython", help="RustPython binary. Measured everywhere except the package ranking.")
+    parser.add_argument("--rustpython", help="RustPython binary. Tested on packages with a pure-Python wheel only.")
     parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
     parser.add_argument("--history", type=Path, action="append", default=[],
                         help="history.json from an earlier run, extended by this one. Repeatable: only "
@@ -357,7 +357,6 @@ def main():
                 next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
             benchmarks = benchmark_results(executables, directory) if args.benchmarks else []
             tests = extract_tests(args.source, directory, reference)
-            packaged = {runtime: path for runtime, path in executables.items() if runtime not in NO_PACKAGES}
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
@@ -367,7 +366,7 @@ def main():
                 "upstream": upstream_results(executables, tests, directory, reference),
                 "benchmarks": benchmarks,
                 "applications": application_results(executables, directory, invoke, reference.numpy) if args.applications else [],
-                "packages": package_results(packaged, directory, reference.ranking) if args.packages else None,
+                "packages": package_results(executables, directory, reference.ranking, PURE_PYTHON_ONLY) if args.packages else None,
             }
             previous = [entry for path in args.history for entry in load_history(path)
                         if not language_mismatch(entry.get("reference", ""), reference.cpython)]
