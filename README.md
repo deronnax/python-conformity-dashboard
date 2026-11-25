@@ -24,6 +24,6 @@ Dans le résumé de l’exécution, télécharger `dashboard-conformite`, décom
 
 ## Interprétation
 
-- **Cas communs**. Le même appel est exécuté sur tous les interpréteurs sélectionnés. On compare le type et la valeur, ou le nom de la classe d’exception. Une API absente, un écart de comportement, un délai dépassé et un blocage de la mesure ont des états distincts.
+- **Cas communs**. Le même appel est exécuté sur tous les interpréteurs sélectionnés. On compare le type et la valeur ou, pour les entrées invalides, la possibilité d’intercepter l’exception avec sa classe publique. Une API absente, un écart de comportement, un délai dépassé et un blocage de la mesure ont des états distincts.
 - **Tests CPython**. Les corps des tests sélectionnés tournent sur CPython et PyPy avec les bibliothèques standard de chaque binaire. Une garde dans le harnais JSON permet de charger les méthodes sélectionnées quand l’accélérateur CPython `_json` est absent. Les tests d’optimisations internes et de l’API C sont hors corpus. [Sources CPython v3.11.17](https://github.com/python/cpython/tree/v3.11.17/Lib/test)
 - **Périmètre**. Les résultats s’appliquent aux cas, binaires et plateformes affichés. MicroPython vise un sous-ensemble de Python et GraalPy 25.5.5 cible Python 3.13. Leur présence dans les cas communs indique quelles API ont le même comportement que CPython 3.11.17 pour ces entrées. [MicroPython](https://docs.micropython.org/en/v1.29.0/genrst/index.html) · [GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5)

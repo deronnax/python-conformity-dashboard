@@ -40,7 +40,7 @@
 
     <details class="methodology">
       <summary>Méthode et périmètre</summary>
-      <p>Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on compare le nom de la classe d’exception.</p>
+      <p>Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on vérifie que le code appelant peut intercepter l’exception avec la classe publique attendue.</p>
       <p>La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython et PyPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.</p>
       <p>Les résultats portent sur ces cas, ces versions et cette plateforme. La colonne MicroPython concerne le port Unix et ses modules fournis. Chaque ligne donne accès à son cas source.</p>
     </details>

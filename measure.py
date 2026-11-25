@@ -91,6 +91,13 @@ def invoke(executable, runtime, *args, cwd):
 
 def observe(executable, runtime, probe, cwd):
     module, attribute = probe.api.split(".")
+    expected_exception = ""
+    exception_type = "None"
+    if probe.expected.startswith("exception: "):
+        expected_exception = probe.expected.removeprefix("exception: ")
+        owner, _, name = expected_exception.rpartition(".")
+        namespace = "module" if owner else "__import__('builtins')"
+        exception_type = f"getattr({namespace}, {name!r}, None)"
     code = f"""
 try:
     module = __import__({module!r})
@@ -108,7 +115,11 @@ else:
         try:
             value = {probe.expression}
         except Exception as exc:
-            print('exception', type(exc).__name__)
+            expected = {exception_type}
+            if expected is not None and isinstance(exc, expected):
+                print('exception', {expected_exception!r})
+            else:
+                print('unexpected-exception', type(exc).__name__)
         else:
             print('value', type(value).__name__, repr(value))
 """
@@ -120,6 +131,8 @@ else:
         return result(kind, payload)
     if kind == "exception":
         return f"exception: {payload}"
+    if kind == "unexpected-exception":
+        return f"exception inattendue: {payload}"
     if kind == "value":
         value_type, _, value = payload.partition(" ")
         try:
