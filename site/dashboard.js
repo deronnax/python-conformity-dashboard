@@ -41,12 +41,15 @@ function initializeDashboard() {
   stamp.textContent = date.format(new Date(stamp.dateTime));
 
   let moduleName = parameters.get("module") ?? "";
+  let contractName = parameters.get("contract") ?? "";
   // Most cases pass, so the tables open on differences. ?diff=0 lists every case.
   let differencesOnly = parameters.get("diff") !== "0";
   const tables = [...document.querySelectorAll("[data-comparison]")].map((panel) => ({
     controls: panel.querySelector(".filters"),
     module: panel.querySelector("[data-module-filter]"),
     differences: panel.querySelector("[data-difference-filter]"),
+    // Only the shared cases have a contract filter.
+    contract: panel.querySelector("[data-contract-filter]"),
     count: panel.querySelector("[data-case-count]"),
     rows: [...panel.querySelectorAll("[data-module]")],
     empty: panel.querySelector("[data-empty]"),
@@ -58,13 +61,20 @@ function initializeDashboard() {
       table.module.value = moduleName;
       const filter = table.module.value;
       table.differences.checked = differencesOnly;
+      let contract = "";
+      if (table.contract) {
+        table.contract.value = contractName;
+        contract = table.contract.value;
+      }
       let visible = 0;
       for (const row of table.rows) {
-        row.hidden = Boolean((filter && row.dataset.module !== filter) || (differencesOnly && !row.hasAttribute("data-difference")));
+        row.hidden = Boolean((filter && row.dataset.module !== filter)
+          || (contract && row.dataset.contract !== contract)
+          || (differencesOnly && !row.hasAttribute("data-difference")));
         if (!row.hidden) visible += 1;
       }
       table.empty.hidden = visible !== 0;
-      const message = differencesOnly && !filter ? "differences" : "filtered";
+      const message = differencesOnly && !filter && !contract ? "differences" : "filtered";
       table.emptyMessage.textContent = table.emptyMessage.dataset[message];
       table.count.textContent = `${visible} / ${table.rows.length} ${table.count.dataset.unit}`;
     }
@@ -74,6 +84,10 @@ function initializeDashboard() {
     table.controls.hidden = false;
     table.module.addEventListener("change", () => {
       moduleName = table.module.value;
+      filterRows();
+    });
+    table.contract?.addEventListener("change", () => {
+      contractName = table.contract.value;
       filterRows();
     });
     table.differences.addEventListener("change", () => {
@@ -101,6 +115,7 @@ function initializeDashboard() {
       const target = new URL(link.href);
       target.hash = location.hash;
       if (moduleName) target.searchParams.set("module", moduleName);
+      if (contractName) target.searchParams.set("contract", contractName);
       if (!differencesOnly) target.searchParams.set("diff", "0");
       location.assign(target);
     });

@@ -1,8 +1,18 @@
 from dataclasses import dataclass
+from pathlib import Path
 
 
 CPYTHON_VERSION = "3.12.15"
 SOURCE_ROOT = f"https://github.com/python/cpython/blob/v{CPYTHON_VERSION}/Lib/"
+DOCS_ROOT = "https://docs.python.org/{}/library/".format(CPYTHON_VERSION.rpartition(".")[0])
+
+# What guarantees the expected result of a shared case:
+# - language_spec: the Python language reference.
+# - stdlib_spec: the standard library documentation for the reference version.
+# - cpython_behavior: observed CPython behavior that the documentation does not promise.
+# - optional_capability: an optional module, build feature or platform capability.
+# - unclassified: nobody has checked the documentation yet.
+CONTRACT_KINDS = ("language_spec", "stdlib_spec", "cpython_behavior", "optional_capability", "unclassified")
 
 
 @dataclass(frozen=True)
@@ -13,12 +23,23 @@ class Probe:
     title_fr: str
     expression: str
     expected: str
-    upstream: str
+    # An upstream CPython test that checks the same behavior. Every case is
+    # written for this dashboard; None means no upstream test checks it.
+    upstream: str | None
     setup: str = ""
 
     @property
     def module(self):
         return self.api.split(".")[0]
+
+    @property
+    def contract(self):
+        return CONTRACTS.get(self.id, ("unclassified", None))[0]
+
+    @property
+    def contract_source(self):
+        anchor = CONTRACTS.get(self.id, ("unclassified", None))[1]
+        return DOCS_ROOT + anchor if anchor else None
 
 
 PROBES = (
@@ -41,12 +62,12 @@ PROBES = (
           "api({'a': [1, 2]}, separators=(',', ':'))", "str: '{\"a\":[1,2]}'",
           "test.test_json.test_separators.TestPySeparators.test_separators"),
     Probe("struct-pack", "struct.pack", "Pack a big-endian integer", "Encoder un entier en ordre gros-boutiste",
-          "api('>H', 0x1234)", "bytes: b'\\x124'", "test.test_struct.StructTest.test_transitiveness"),
+          "api('>H', 0x1234)", "bytes: b'\\x124'", None),
     Probe("struct-unpack", "struct.unpack", "Unpack a signed little-endian integer",
           "Décoder un entier signé en ordre petit-boutiste",
-          r"api('<h', b'\xfe\xff')", "tuple: (-2,)", "test.test_struct.StructTest.test_transitiveness"),
+          r"api('<h', b'\xfe\xff')", "tuple: (-2,)", None),
     Probe("struct-calcsize", "struct.calcsize", "Count padding bytes", "Compter les octets de remplissage",
-          "api('>B3xH')", "int: 6", "test.test_struct.StructTest.test_calcsize"),
+          "api('>B3xH')", "int: 6", None),
     Probe("struct-unpack-from", "struct.unpack_from", "Read from an offset", "Lire à partir d’un décalage",
           r"api('>H', b'x\x01\x02', 1)", "tuple: (258,)", "test.test_struct.StructTest.test_unpack_from"),
     Probe("struct-invalid-format", "struct.calcsize", "Reject an unknown format", "Rejeter un format inconnu",
@@ -57,7 +78,7 @@ PROBES = (
     Probe("binascii-hex", "binascii.hexlify", "Encode bytes as hexadecimal", "Encoder des octets en hexadécimal",
           r"api(b'\x00\xff')", "bytes: b'00ff'", "test.test_binascii.BinASCIITest.test_hex"),
     Probe("binascii-unhex", "binascii.unhexlify", "Decode mixed-case hexadecimal", "Décoder de l’hexadécimal mixte",
-          "api('00Ff')", "bytes: b'\\x00\\xff'", "test.test_binascii.BinASCIITest.test_hex"),
+          "api('00Ff')", "bytes: b'\\x00\\xff'", None),
     Probe("binascii-odd-hex", "binascii.unhexlify", "Reject a single hex digit", "Rejeter un chiffre hexadécimal isolé",
           "api('a')", "exception: binascii.Error", "test.test_binascii.BinASCIITest.test_hex"),
     Probe("binascii-base64-decode", "binascii.a2b_base64", "Decode padded Base64", "Décoder du Base64 avec remplissage",
@@ -103,14 +124,14 @@ PROBES = (
           "test.test_re.ReTests.test_re_groupref_exists"),
     Probe("re-lookbehind", "re.compile", "Reject a variable-width lookbehind",
           "Rejeter un lookbehind de largeur variable",
-          "api('(?<=a+)b')", "exception: re.error", "test.test_re.ReTests.test_lookbehind"),
+          "api('(?<=a+)b')", "exception: re.error", None),
 
     # Decimal equality alone would miss changes in exponent, flags and context.
     Probe("decimal-half-even", "decimal.Decimal.quantize", "Round ties to even digits",
           "Arrondir les valeurs médianes vers un chiffre pair",
           "(str(api(module.Decimal('2.5'), module.Decimal('1'), rounding=module.ROUND_HALF_EVEN)), "
           "str(api(module.Decimal('3.5'), module.Decimal('1'), rounding=module.ROUND_HALF_EVEN)))",
-          "tuple: ('2', '4')", "test.test_decimal.PyContextAPItests.test_quantize"),
+          "tuple: ('2', '4')", None),
     Probe("decimal-context", "decimal.localcontext", "Restore precision after leaving a local context",
           "Rétablir la précision après un contexte local",
           "(inside, module.getcontext().prec == original)", "tuple: ('0.333', True)",
@@ -123,7 +144,7 @@ PROBES = (
     Probe("decimal-trap", "decimal.Context.divide", "Raise an exception for a trapped inexact result",
           "Lever une exception quand un résultat inexact est intercepté",
           "api(context, module.Decimal(1), module.Decimal(3))", "exception: decimal.Inexact",
-          "test.test_decimal.PyContextFlags.test_float_operation_default",
+          None,
           setup="""
               context = module.Context(prec=3)
               context.traps[module.Inexact] = True
@@ -131,7 +152,7 @@ PROBES = (
     Probe("decimal-flags", "decimal.Context.divide", "Set flags when division rounds the result",
           "Activer les indicateurs quand la division arrondit le résultat",
           "(str(quotient), bool(context.flags[module.Inexact]), bool(context.flags[module.Rounded]))",
-          "tuple: ('0.333', True, True)", "test.test_decimal.PyContextAPItests.test_quantize",
+          "tuple: ('0.333', True, True)", None,
           setup="""
               context = module.Context(prec=3)
               quotient = api(context, module.Decimal(1), module.Decimal(3))
@@ -186,7 +207,7 @@ PROBES = (
     Probe("sqlite-rollback", "sqlite3.connect", "Roll back an insert after a commit",
           "Annuler une insertion après une validation",
           "(inside, connection.in_transaction, rows)", "tuple: (True, False, [(1,)])",
-          "test.test_sqlite3.test_transactions.TransactionTests.test_rollback_cursor_consistency",
+          "test.test_sqlite3.test_dbapi.ConnectionTests.test_in_transaction",
           setup="""
               connection = api(':memory:')
               connection.execute('create table example (value integer)')
@@ -205,7 +226,7 @@ PROBES = (
     Probe("sqlite-row", "sqlite3.Row", "Look up result column names without matching case",
           "Retrouver un nom de colonne indépendamment de la casse",
           "(row['label'], row['LABEL'], row[-1], row.keys())", "tuple: ('value', 'value', 4, ['Label', 'count'])",
-          "test.test_sqlite3.test_factory.RowFactoryTests.test_sqlite_row_as_dict",
+          "test.test_sqlite3.test_factory.RowFactoryTests.test_sqlite_row_index",
           setup="""
               connection = module.connect(':memory:')
               connection.row_factory = module.Row
@@ -214,7 +235,7 @@ PROBES = (
     Probe("sqlite-unique", "sqlite3.Connection.execute", "Raise IntegrityError on a duplicate key",
           "Lever IntegrityError en cas de clé dupliquée",
           "api(connection, 'insert into example values (1)')", "exception: sqlite3.IntegrityError",
-          "test.test_sqlite3.test_dbapi.SqliteOnConflictTests.test_on_conflict_ignore",
+          None,
           setup="""
               connection = module.connect(':memory:')
               connection.execute('create table example (value integer unique)')
@@ -259,7 +280,7 @@ PROBES = (
     Probe("ssl-client-hostname", "ssl.SSLContext.wrap_bio", "Expose the configured hostname on an SSL object",
           "Exposer le nom d’hôte configuré sur un objet SSL",
           "api(context, module.MemoryBIO(), module.MemoryBIO(), server_hostname='example.test').server_hostname",
-          "str: 'example.test'", "test.test_ssl.SSLObjectTests.test_server_side_bad_params",
+          "str: 'example.test'", None,
           setup="context = module.SSLContext(module.PROTOCOL_TLS_CLIENT)"),
 
     Probe("mmap-overlap", "mmap.mmap", "Move overlapping ranges within a memory map",
@@ -268,7 +289,7 @@ PROBES = (
           setup="region = api(-1, 6)\nregion[:] = b'abcdef'\nregion.move(1, 0, 4)"),
     Probe("mmap-memoryview", "mmap.mmap", "Reject closing a map with an active memory view",
           "Refuser la fermeture d’une zone mappée tant qu’une vue est active",
-          "region.close()", "exception: BufferError", "test.test_mmap.MmapTests.test_context_manager",
+          "region.close()", "exception: BufferError", None,
           setup="region = api(-1, 4)\nview = memoryview(region)"),
     Probe("mmap-slice", "mmap.mmap", "Assign to a strided memory map slice",
           "Écrire dans une tranche de mémoire mappée avec un pas",
@@ -285,7 +306,7 @@ PROBES = (
           "test.test_codecs.UTF8Test.test_partial", setup="decoder = api('utf-8')()"),
     Probe("codecs-truncated-utf8", "codecs.getincrementaldecoder", "Reject a truncated UTF-8 sequence at EOF",
           "Rejeter une séquence UTF-8 tronquée en fin de flux",
-          "decoder.decode(b'', final=True)", "exception: UnicodeDecodeError", "test.test_codecs.UTF8Test.test_decode_error",
+          "decoder.decode(b'', final=True)", "exception: UnicodeDecodeError", None,
           setup=r"""
               decoder = api('utf-8')()
               decoder.decode(b'\xe2\x82')
@@ -305,7 +326,7 @@ PROBES = (
     Probe("datetime-utc", "datetime.datetime.fromisoformat", "Parse the ISO 8601 UTC suffix",
           "Lire le suffixe UTC ISO 8601",
           "api('2024-02-29T12:30:15Z').isoformat()", "str: '2024-02-29T12:30:15+00:00'",
-          "test.datetimetester.TestDateTime.test_fromisoformat_utc"),
+          "test.datetimetester.TestDateTime.test_fromisoformat_datetime_examples"),
     Probe("datetime-invalid-date", "datetime.date.fromisoformat", "Reject an impossible leap-day date",
           "Rejeter une date impossible en fin de février",
           "api('2023-02-29')", "exception: ValueError", "test.datetimetester.TestDate.test_fromisoformat_fails"),
@@ -361,7 +382,7 @@ PROBES = (
     Probe("threading-append", "threading.Thread", "Append from several threads without losing items",
           "Ajouter depuis plusieurs threads sans perdre d’éléments",
           "(len(items), sum(items))", "tuple: (40000, 199980000)",
-          "test.test_threading.ThreadTests.test_various_ops",
+          None,
           setup="""
               items = []
 
@@ -377,7 +398,7 @@ PROBES = (
           """),
     Probe("threading-lock", "threading.Lock", "Protect a shared counter with a lock",
           "Protéger un compteur partagé avec un verrou",
-          "counter[0]", "int: 20000", "test.test_threading.ThreadTests.test_various_ops",
+          "counter[0]", "int: 20000", None,
           setup="""
               lock = api()
               counter = [0]
@@ -396,7 +417,7 @@ PROBES = (
     Probe("threading-local", "threading.local", "Keep thread-local values separate",
           "Isoler les valeurs locales à chaque thread",
           "(state.value, seen)", "tuple: ('main', ['worker'])",
-          "test.test_threading_local.ThreadLocalTest.test_local_refs",
+          None,
           setup="""
               state = api()
               state.value = 'main'
@@ -473,6 +494,94 @@ PROBES = (
                   return child.result(), label.get()
           """),
 )
+
+
+# Documentation that states each expected result, relative to DOCS_ROOT. A case
+# stays unclassified when the documentation is silent or ambiguous about it.
+CONTRACTS = {
+    "json-empty": ("stdlib_spec", "json.html#json-to-py-table"),
+    "json-whitespace": ("stdlib_spec", "json.html#standard-compliance-and-interoperability"),
+    "json-extra-data": ("stdlib_spec", "json.html#json.loads"),
+    "json-unicode": ("stdlib_spec", "json.html#standard-compliance-and-interoperability"),
+    "json-parse-int": ("stdlib_spec", "json.html#json.load"),
+    "json-separators": ("stdlib_spec", "json.html#json.dump"),
+    "struct-pack": ("stdlib_spec", "struct.html#byte-order-size-and-alignment"),
+    "struct-unpack": ("stdlib_spec", "struct.html#byte-order-size-and-alignment"),
+    "struct-calcsize": ("stdlib_spec", "struct.html#format-characters"),
+    "struct-unpack-from": ("stdlib_spec", "struct.html#struct.unpack_from"),
+    # struct.error is documented as raised "on various occasions", not for unknown codes.
+    "struct-invalid-format": ("unclassified", None),
+    "struct-iter": ("stdlib_spec", "struct.html#struct.iter_unpack"),
+    "binascii-hex": ("stdlib_spec", "binascii.html#binascii.hexlify"),
+    "binascii-unhex": ("stdlib_spec", "binascii.html#binascii.unhexlify"),
+    "binascii-odd-hex": ("stdlib_spec", "binascii.html#binascii.unhexlify"),
+    "binascii-base64-decode": ("stdlib_spec", "binascii.html#binascii.a2b_base64"),
+    "binascii-base64-newline": ("stdlib_spec", "binascii.html#binascii.b2a_base64"),
+    "binascii-crc32": ("stdlib_spec", "binascii.html#binascii.crc32"),
+    "binascii-crc-hqx": ("stdlib_spec", "binascii.html#binascii.crc_hqx"),
+    "math-sqrt": ("stdlib_spec", "math.html#math.sqrt"),
+    "math-sqrt-negative": ("stdlib_spec", "math.html#special-functions"),
+    "math-floor": ("stdlib_spec", "math.html#math.floor"),
+    "math-nan": ("stdlib_spec", "math.html#math.isnan"),
+    "math-isclose": ("stdlib_spec", "math.html#math.isclose"),
+    "math-gcd": ("stdlib_spec", "math.html#math.gcd"),
+    "re-atomic": ("stdlib_spec", "re.html#regular-expression-syntax"),
+    "re-possessive": ("stdlib_spec", "re.html#regular-expression-syntax"),
+    "re-unicode-fold": ("stdlib_spec", "re.html#re.IGNORECASE"),
+    "re-ascii-fold": ("stdlib_spec", "re.html#re.IGNORECASE"),
+    "re-conditional": ("stdlib_spec", "re.html#regular-expression-syntax"),
+    "re-lookbehind": ("stdlib_spec", "re.html#regular-expression-syntax"),
+    "decimal-half-even": ("stdlib_spec", "decimal.html#decimal.Decimal.quantize"),
+    "decimal-context": ("stdlib_spec", "decimal.html#decimal.localcontext"),
+    "decimal-trap": ("stdlib_spec", "decimal.html#signals"),
+    "decimal-flags": ("stdlib_spec", "decimal.html#signals"),
+    "zlib-eof": ("stdlib_spec", "zlib.html#zlib.Decompress.eof"),
+    "zlib-unused": ("stdlib_spec", "zlib.html#zlib.Decompress.unused_data"),
+    "zlib-max-length": ("stdlib_spec", "zlib.html#zlib.Decompress.decompress"),
+    "zlib-dictionary": ("stdlib_spec", "zlib.html#zlib.compressobj"),
+    "zlib-window": ("stdlib_spec", "zlib.html#zlib.compressobj"),
+    "sqlite-rollback": ("stdlib_spec", "sqlite3.html#sqlite3.Connection.in_transaction"),
+    "sqlite-binding": ("stdlib_spec", "sqlite3.html#sqlite3-placeholders"),
+    "sqlite-row": ("stdlib_spec", "sqlite3.html#sqlite3.Row"),
+    "sqlite-unique": ("stdlib_spec", "sqlite3.html#sqlite3.IntegrityError"),
+    "sqlite-blob": ("stdlib_spec", "sqlite3.html#sqlite3.Connection.blobopen"),
+    "sqlite-function": ("stdlib_spec", "sqlite3.html#sqlite3.Connection.create_function"),
+    "ssl-bio-pending": ("stdlib_spec", "ssl.html#ssl.MemoryBIO.pending"),
+    "ssl-bio-eof": ("stdlib_spec", "ssl.html#ssl.MemoryBIO.eof"),
+    "ssl-client-policy": ("stdlib_spec", "ssl.html#ssl.PROTOCOL_TLS_CLIENT"),
+    "ssl-client-hostname": ("stdlib_spec", "ssl.html#ssl.SSLObject"),
+    # mmap.move() is documented as a copy, without saying how overlapping ranges behave.
+    "mmap-overlap": ("cpython_behavior", None),
+    # mmap.close() documents ValueError for later calls, not BufferError for exported buffers.
+    "mmap-memoryview": ("cpython_behavior", None),
+    "mmap-slice": ("stdlib_spec", "mmap.html#module-mmap"),
+    "mmap-seek": ("stdlib_spec", "mmap.html#mmap.mmap.seek"),
+    "codecs-split-utf8": ("stdlib_spec", "codecs.html#codecs.IncrementalDecoder.decode"),
+    "codecs-truncated-utf8": ("stdlib_spec", "codecs.html#codecs.IncrementalDecoder.decode"),
+    "codecs-surrogateescape": ("stdlib_spec", "codecs.html#error-handlers"),
+    "codecs-bom": ("stdlib_spec", "codecs.html#encodings-and-unicode"),
+    "datetime-offset": ("stdlib_spec", "datetime.html#datetime.datetime.fromisoformat"),
+    "datetime-utc": ("stdlib_spec", "datetime.html#datetime.datetime.fromisoformat"),
+    "datetime-invalid-date": ("stdlib_spec", "datetime.html#datetime.date.fromisoformat"),
+    "zoneinfo-fold": ("stdlib_spec", "zoneinfo.html#using-zoneinfo"),
+    "csv-multiline": ("stdlib_spec", "csv.html#csv.reader"),
+    # The csv documentation does not mention NUL characters in fields.
+    "csv-nul": ("unclassified", None),
+    "csv-strict": ("stdlib_spec", "csv.html#csv.Dialect.strict"),
+    "csv-restkey": ("stdlib_spec", "csv.html#csv.DictReader"),
+    "itertools-pairwise": ("stdlib_spec", "itertools.html#itertools.pairwise"),
+    # The documentation does not say how far islice() advances the source iterator.
+    "itertools-islice": ("unclassified", None),
+    "itertools-accumulate": ("stdlib_spec", "itertools.html#itertools.accumulate"),
+    "itertools-groupby": ("stdlib_spec", "itertools.html#itertools.groupby"),
+    # Python 3.12 documents no thread safety for list.append().
+    "threading-append": ("cpython_behavior", None),
+    "threading-lock": ("stdlib_spec", "threading.html#lock-objects"),
+    "threading-local": ("stdlib_spec", "threading.html#thread-local-data"),
+    "asyncio-taskgroup": ("stdlib_spec", "asyncio-task.html#task-groups"),
+    "asyncio-cancel-sibling": ("stdlib_spec", "asyncio-task.html#task-groups"),
+    "asyncio-context": ("stdlib_spec", "asyncio-task.html#asyncio.TaskGroup.create_task"),
+}
 
 
 # These individual upstream methods exercise public behavior. JSON's upstream
@@ -576,5 +685,40 @@ UPSTREAM = {
 }
 
 
-def source_url(test_id):
-    return SOURCE_ROOT + "/".join(test_id.split(".")[:-2]) + ".py"
+def test_location(test_id):
+    """Split a test id into the source file path, relative to Lib/, and the class and method names."""
+    parts = test_id.split(".")
+    return "/".join(parts[:-2]) + ".py", parts[-2], parts[-1]
+
+
+def test_line(test_id, lib):
+    """Line of the test method in an extracted Lib directory, following base classes
+    defined in the same file. None when the method is defined elsewhere."""
+    import ast
+    path, cls, method = test_location(test_id)
+    try:
+        tree = ast.parse((Path(lib) / path).read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return None
+    classes = {node.name: node for node in ast.walk(tree) if isinstance(node, ast.ClassDef)}
+    pending, seen = [cls], set()
+    while pending:
+        name = pending.pop(0)
+        if name in seen or name not in classes:
+            continue
+        seen.add(name)
+        for item in classes[name].body:
+            if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == method:
+                return item.lineno
+        pending.extend(base.id if isinstance(base, ast.Name) else getattr(base, "attr", "")
+                       for base in classes[name].bases)
+    return None
+
+
+def source_url(test_id, lib=None):
+    """Immutable link to an upstream test: the release tag, and the method line when known."""
+    if test_id is None:
+        return None
+    path = test_location(test_id)[0]
+    line = test_line(test_id, lib) if lib else None
+    return SOURCE_ROOT + path + (f"#L{line}" if line else "")

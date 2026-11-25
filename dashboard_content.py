@@ -22,6 +22,23 @@ TRANSLATIONS = {
         "interpretersMethod": "Four threads run the same CPU-bound function. The speedup compares them with four sequential calls. About ×1 means the threads take turns, as under a global interpreter lock. A value close to the number of workers means they run in parallel. The measurement is limited by the cores of the machine that ran it.",
         "interpreter": "Interpreter",
         "pythonVersion": "Python",
+        "implementationVersion": "Release",
+        "crossVersionNote": "Python {version} · other version",
+        "otherVersion": "Not the {reference} reference",
+        "crossVersionCard": "Implements Python {version}; the reference is {reference}. A difference can come from the version.",
+        "contract": "Contract",
+        "contractLine": "Contract: {contract}",
+        "allContracts": "All contracts",
+        "contractIntro": "Each case says what guarantees its expected result. A difference on documented behavior is a conformity gap. A difference on CPython behavior is not necessarily a bug.",
+        "contracts": {
+            "language_spec": "Python language reference",
+            "stdlib_spec": "Documented standard library behavior",
+            "cpython_behavior": "CPython behavior, not documented",
+            "optional_capability": "Optional capability",
+            "unclassified": "Not yet classified"
+        },
+        "upstreamSame": "Upstream CPython test that checks the same behavior",
+        "upstreamNone": "Written for this dashboard. No upstream CPython test checks this behavior.",
         "abi": "Wheel ABI",
         "gil": "GIL",
         "gilEnabled": "Enabled",
@@ -108,6 +125,7 @@ TRANSLATIONS = {
             "importError": "Import failed",
             "blocked": "Measurement blocked",
             "crash": "Process interrupted",
+            "internalError": "Internal interpreter error",
             "timeout": "Timed out",
             "unverified": "Invalid reference"
         },
@@ -142,6 +160,7 @@ TRANSLATIONS = {
                 "interrupted process",
                 "interrupted processes"
             ],
+            "internalError": ["internal interpreter error", "internal interpreter errors"],
             "timeout": [
                 "timeout",
                 "timeouts"
@@ -174,6 +193,23 @@ TRANSLATIONS = {
         "interpretersMethod": "Quatre threads exécutent la même fonction qui sature le processeur. L’accélération les compare à quatre appels successifs. Une valeur proche de ×1 signifie que les threads passent à tour de rôle, comme avec un verrou global de l’interpréteur. Une valeur proche du nombre de threads signifie qu’ils s’exécutent en parallèle. La mesure est limitée par les cœurs de la machine qui l’a faite.",
         "interpreter": "Interpréteur",
         "pythonVersion": "Python",
+        "implementationVersion": "Version",
+        "crossVersionNote": "Python {version} · autre version",
+        "otherVersion": "Différente de la référence {reference}",
+        "crossVersionCard": "Implémente Python {version} ; la référence est {reference}. Un écart peut venir de la version.",
+        "contract": "Contrat",
+        "contractLine": "Contrat : {contract}",
+        "allContracts": "Tous les contrats",
+        "contractIntro": "Chaque cas indique ce qui garantit le résultat attendu. Un écart sur un comportement documenté est un défaut de conformité. Un écart sur un comportement propre à CPython n’est pas forcément un bug.",
+        "contracts": {
+            "language_spec": "Référence du langage Python",
+            "stdlib_spec": "Comportement documenté de la bibliothèque standard",
+            "cpython_behavior": "Comportement de CPython, non documenté",
+            "optional_capability": "Capacité optionnelle",
+            "unclassified": "Pas encore classé"
+        },
+        "upstreamSame": "Test CPython d’origine qui vérifie le même comportement",
+        "upstreamNone": "Écrit pour ce dashboard. Aucun test CPython d’origine ne vérifie ce comportement.",
         "abi": "ABI des wheels",
         "gil": "GIL",
         "gilEnabled": "Activé",
@@ -260,6 +296,7 @@ TRANSLATIONS = {
             "importError": "Échec de l’import",
             "blocked": "Mesure bloquée",
             "crash": "Processus interrompu",
+            "internalError": "Erreur interne de l’interpréteur",
             "timeout": "Délai dépassé",
             "unverified": "Référence invalide"
         },
@@ -294,6 +331,7 @@ TRANSLATIONS = {
                 "processus interrompu",
                 "processus interrompus"
             ],
+            "internalError": ["erreur interne de l’interpréteur", "erreurs internes de l’interpréteur"],
             "timeout": [
                 "délai dépassé",
                 "délais dépassés"

@@ -25,6 +25,33 @@ VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": 
 OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
 
 
+def language_version(runtime):
+    """Python version an interpreter implements, as opposed to its own release number."""
+    return runtime.get("language") or runtime["version"].split()[0]
+
+
+def implementation_version(runtime):
+    if runtime.get("implementationVersion"):
+        return runtime["implementationVersion"]
+    version = runtime["version"]
+    named = re.search(r"(?:PyPy|RustPython) v?([\d.]+)", version, flags=re.IGNORECASE)
+    return named[1] if named and runtime["id"] != "cpython" else version.split()[0]
+
+
+def minor(version):
+    return ".".join(version.split(".")[:2])
+
+
+def cross_version(runtime, reference):
+    return minor(language_version(runtime)) != minor(reference)
+
+
+def version_notes(runtimes, reference, copy):
+    """Column notes for interpreters that implement another Python version than the reference."""
+    return {runtime["id"]: copy["crossVersionNote"].format(version=minor(language_version(runtime)))
+            for runtime in runtimes if cross_version(runtime, reference)}
+
+
 def visible_runtimes(rows, runtimes):
     return [runtime for runtime in runtimes if any(runtime["id"] in row["outcomes"] for row in rows)]
 
@@ -79,16 +106,13 @@ def detailed_badge(outcome, language, copy):
     return label
 
 
-def render_summaries(rows, runtimes, copy, label_key="passedOn"):
+def render_summaries(rows, runtimes, copy, label_key="passedOn", reference=None):
     cards = []
     for runtime in runtimes:
         counts = Counter(row["outcomes"][runtime["id"]]["status"] for row in rows)
         passed = counts["passed"]
         version = runtime["version"]
-        build = version.split()[0]
-        named = re.search(r"(?:PyPy|RustPython) v?([\d.]+)", version, flags=re.IGNORECASE)
-        if named and runtime["id"] != "cpython":
-            build = named[1]
+        build = implementation_version(runtime)
         name = runtime["name"]
         label = copy[label_key].format(runtime=name)
         breakdown = " · ".join(
@@ -96,12 +120,25 @@ def render_summaries(rows, runtimes, copy, label_key="passedOn"):
             for status, (singular, plural) in copy["totals"].items() if counts[status]
         )
         detail = f'<p class="summary-detail">{escape(breakdown)}</p>' if breakdown else ""
+        if reference and cross_version(runtime, reference):
+            note = copy["crossVersionCard"].format(version=language_version(runtime), reference=reference)
+            detail = f'<p class="summary-detail cross-version">{escape(note)}</p>' + detail
         cards.append(f"""<article class="summary-card">
             <p class="runtime-name" title="{escape(version)}">{escape(name)} {escape(build)}</p>
             <p class="score">{passed} / {len(rows)}</p>
             <progress max="{len(rows)}" value="{passed}" aria-label="{escape(label)}"></progress>{detail}
           </article>""")
     return "".join(cards)
+
+
+def contract_line(row, copy):
+    """Say what guarantees the expected result, linked to the documentation that states it."""
+    kind = row["contract"]
+    label = escape(copy["contracts"].get(kind, kind))
+    if row.get("contractSource"):
+        label = f'<a href="{escape(row["contractSource"])}">{label}</a>'
+    prefix, _, suffix = copy["contractLine"].partition("{contract}")
+    return f'<p class="contract">{escape(prefix)}{label}{escape(suffix)}</p>'
 
 
 def case_details(row, runtimes, language, copy, *, observed):
@@ -114,10 +151,15 @@ def case_details(row, runtimes, language, copy, *, observed):
     contents = []
     if row.get("code"):
         contents.append(f'<pre>{escape(row["code"])}</pre>')
-    if row["source"].startswith("https://"):
+    if row.get("contract"):
+        contents.append(contract_line(row, copy))
+    if (row.get("source") or "").startswith("https://"):
+        label = copy["upstreamSame"] if observed else copy["source"]
         contents.append(
-            f'<a href="{escape(row["source"])}" title="{escape(row["sourceTest"])}">{escape(copy["source"])}</a>'
+            f'<p class="provenance"><a href="{escape(row["source"])}" title="{escape(row["sourceTest"])}">{escape(label)}</a></p>'
         )
+    elif observed:
+        contents.append(f'<p class="provenance">{escape(copy["upstreamNone"])}</p>')
     for runtime in runtimes:
         outcome = row["outcomes"][runtime["id"]]
         detail = describe_observation(outcome, language, copy) if observed else outcome_detail(outcome, language)
@@ -137,20 +179,34 @@ def render_comparison(suite, report, language, copy):
         cells = [f'<th scope="row">{details}</th>']
         cells.extend(f'<td>{badge(row["outcomes"][runtime["id"]], copy)}</td>' for runtime in runtimes)
         flag = " data-difference" if difference else ""
+        if row.get("contract"):
+            flag += f' data-contract="{escape(row["contract"])}"'
         table_rows.append(f'<tr data-module="{escape(row["module"])}"{flag}>{"".join(cells)}</tr>')
 
     modules = sorted({row["module"] for row in rows})
     options = [f'<option value="">{escape(copy["allModules"])}</option>']
     options.extend(f'<option value="{escape(module)}">{escape(module)}</option>' for module in modules)
+    contracts = Counter(row["contract"] for row in rows if row.get("contract"))
+    contract_filter = contract_summary = ""
+    if contracts:
+        kinds = [kind for kind in copy["contracts"] if contracts[kind]]
+        choices = [f'<option value="">{escape(copy["allContracts"])}</option>']
+        choices.extend(f'<option value="{escape(kind)}">{escape(copy["contracts"][kind])} ({contracts[kind]})</option>'
+                       for kind in kinds)
+        contract_filter = (f'<label>{escape(copy["contract"])} <select data-contract-filter>'
+                           f'{"".join(choices)}</select></label>')
+        contract_summary = f'<p class="description">{escape(copy["contractIntro"])}</p>'
     return f"""<section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
         <h2>{escape(copy[suite + "Tab"])}</h2>
         <p class="description">{escape(copy["descriptions"][suite])}</p>
         <p class="description">{escape(copy["performanceOnly"])}</p>
+        {contract_summary}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
-          {render_summaries(rows, runtimes, copy)}
+          {render_summaries(rows, runtimes, copy, reference=report["reference"])}
         </div>
         <div class="filters" hidden>
           <label>{escape(copy["module"])} <select data-module-filter>{"".join(options)}</select></label>
+          {contract_filter}
           <label class="only-differences">
             <input type="checkbox" data-difference-filter> {escape(copy["onlyDifferences"])}
           </label>
@@ -160,7 +216,7 @@ def render_comparison(suite, report, language, copy):
         </div>
         <div class="table-scroll" role="region" aria-label="{escape(copy["caseTable"])}" tabindex="0">
           <table>
-            {table_head((copy["case"],), runtimes)}
+            {table_head((copy["case"],), runtimes, notes=version_notes(runtimes, report["reference"], copy))}
             <tbody>
               {"".join(table_rows)}
               <tr data-empty hidden><td class="empty" colspan="{len(runtimes) + 1}"
@@ -194,11 +250,11 @@ def render_applications(report, language, copy):
         <p class="description">{escape(copy["descriptions"]["applications"])}</p>
         <p class="description">{escape(copy["performanceOnly"])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
-          {render_summaries(rows, runtimes, copy, "applicationsPassedOn")}
+          {render_summaries(rows, runtimes, copy, "applicationsPassedOn", report["reference"])}
         </div>
         <div class="table-scroll" role="region" aria-label="{escape(copy["applicationsTab"])}" tabindex="0">
           <table class="result-table">
-            {table_head((copy["scenario"],), runtimes)}
+            {table_head((copy["scenario"],), runtimes, notes=version_notes(runtimes, report["reference"], copy))}
             <tbody>{"".join(listing)}</tbody>
           </table>
         </div>
@@ -234,13 +290,15 @@ def render_packages(report, language, copy):
     window = copy["packagesWindow"].format(start=ranking["start"], end=last_date)
     labels = (copy["rank"], copy["package"], copy["downloads"])
     abis = {runtime: tag["abi"] for runtime, tag in ranking.get("tags", {}).items()}
+    for runtime, note in version_notes(runtimes, report["reference"], copy).items():
+        abis[runtime] = f"{abis[runtime]} · {note}" if runtime in abis else note
     return f"""<section id="{VIEWS["packages"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
         <p class="description">{escape(copy["packagesMethod"])}</p>
         <p class="description">{escape(copy["performanceOnly"])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
-          {render_summaries(rows, runtimes, copy, "packagesPassedOn")}
+          {render_summaries(rows, runtimes, copy, "packagesPassedOn", report["reference"])}
         </div>
         <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
           <table class="package-table">
@@ -270,14 +328,21 @@ def render_interpreters(report, language, copy):
             gil_cell, speedup = escape(copy["gilUnknown"]), badge(threads, copy)
         else:
             gil_cell, speedup = escape(copy["gilUnknown"]), ""
-        build = runtime["version"].split()[0]
+        language = language_version(runtime)
+        if cross_version(runtime, report["reference"]):
+            note = copy["otherVersion"].format(reference=report["reference"])
+            language_cell = f'{escape(language)}<span class="version-note">{escape(note)}</span>'
+        else:
+            language_cell = escape(language)
         abi = tags.get(runtime["id"], {}).get("abi")
         listing.append(
             f'<tr><th scope="row"><span class="runtime-key series-{css_token(runtime["id"])}" aria-hidden="true"></span>'
-            f'{escape(runtime["name"])}</th><td>{escape(build)}</td>'
+            f'{escape(runtime["name"])}</th><td title="{escape(runtime["version"])}">{escape(implementation_version(runtime))}</td>'
+            f'<td>{language_cell}</td>'
             f'<td>{"<code>" + escape(abi) + "</code>" if abi else ""}</td><td>{gil_cell}</td><td class="speedup-cell">{speedup}</td></tr>'
         )
-    labels = (copy["interpreter"], copy["pythonVersion"], copy["abi"], copy["gil"], copy["threadsSpeedup"])
+    labels = (copy["interpreter"], copy["implementationVersion"], copy["pythonVersion"], copy["abi"], copy["gil"],
+              copy["threadsSpeedup"])
     head = "<thead><tr>" + "".join(f'<th scope="col">{escape(label)}</th>' for label in labels) + "</tr></thead>"
     return f"""<section id="{VIEWS["interpreters"]}" data-dashboard-panel>
         <h2>{escape(copy["interpretersTab"])}</h2>
