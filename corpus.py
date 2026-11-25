@@ -357,6 +357,60 @@ PROBES = (
           "[(key, ''.join(values)) for key, values in api('aabba')]", "list: [('a', 'aa'), ('b', 'bb'), ('a', 'a')]",
           "test.test_itertools.TestBasicOps.test_groupby"),
 
+    # Threads must not lose updates, with or without a global lock.
+    Probe("threading-append", "threading.Thread", "Append from several threads without losing items",
+          "Ajouter depuis plusieurs threads sans perdre d’éléments",
+          "(len(items), sum(items))", "tuple: (40000, 199980000)",
+          "test.test_threading.ThreadTests.test_various_ops",
+          setup="""
+              items = []
+
+              def work():
+                  for number in range(10000):
+                      items.append(number)
+
+              threads = [api(target=work) for _ in range(4)]
+              for thread in threads:
+                  thread.start()
+              for thread in threads:
+                  thread.join()
+          """),
+    Probe("threading-lock", "threading.Lock", "Protect a shared counter with a lock",
+          "Protéger un compteur partagé avec un verrou",
+          "counter[0]", "int: 20000", "test.test_threading.ThreadTests.test_various_ops",
+          setup="""
+              lock = api()
+              counter = [0]
+
+              def work():
+                  for _ in range(5000):
+                      with lock:
+                          counter[0] += 1
+
+              threads = [module.Thread(target=work) for _ in range(4)]
+              for thread in threads:
+                  thread.start()
+              for thread in threads:
+                  thread.join()
+          """),
+    Probe("threading-local", "threading.local", "Keep thread-local values separate",
+          "Isoler les valeurs locales à chaque thread",
+          "(state.value, seen)", "tuple: ('main', ['worker'])",
+          "test.test_threading_local.ThreadLocalTest.test_local_refs",
+          setup="""
+              state = api()
+              state.value = 'main'
+              seen = []
+
+              def work():
+                  state.value = 'worker'
+                  seen.append(state.value)
+
+              thread = module.Thread(target=work)
+              thread.start()
+              thread.join()
+          """),
+
     Probe("asyncio-taskgroup", "asyncio.TaskGroup", "Wait for every child before leaving a task group",
           "Attendre toutes les tâches avant de quitter un groupe",
           "module.run(main())", "tuple: (2, 8)", "test.test_asyncio.test_taskgroups.TestTaskGroup.test_taskgroup_01",
