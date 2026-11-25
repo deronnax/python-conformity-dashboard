@@ -54,8 +54,15 @@ def version(info):
     if level != "final":
         text += {"alpha": "a", "beta": "b", "candidate": "rc"}.get(level, level) + str(getattr(info, "serial", ""))
     return text
+release = version(sys.implementation.version)
+try:
+    # GraalPy 24 reports its Python version in sys.implementation.version.
+    import __graalpython__
+    release = __graalpython__.get_graalvm_version()
+except (ImportError, AttributeError):
+    pass
 print(json.dumps({"implementation": sys.implementation.name,
-                  "implementationVersion": version(sys.implementation.version),
+                  "implementationVersion": release,
                   "language": version(sys.version_info), "version": sys.version,
                   "cacheTag": sys.implementation.cache_tag}))
 """
