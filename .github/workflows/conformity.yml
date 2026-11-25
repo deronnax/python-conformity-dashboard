@@ -3,6 +3,9 @@ name: Python Conformity
 on:
   push:
     branches: [main]
+  # Pull requests are measured too. Only a run on main publishes the site.
+  pull_request:
+    branches: [main]
   # Package releases and wheels change without a push, so the dashboard is
   # measured again every Monday.
   schedule:
@@ -110,11 +113,11 @@ jobs:
       id-token: write
     environment:
       name: github-pages
-      url: ${{ steps.deploiement.outputs.page_url }}
+      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: pages
       cancel-in-progress: false
     steps:
       - name: Deploy to GitHub Pages
-        id: deploiement
+        id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
