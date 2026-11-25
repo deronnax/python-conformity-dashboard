@@ -15,7 +15,7 @@ from applications import PYPI, Wheel, prepare
 
 
 ROOT = Path(__file__).resolve().parent
-RANKING = ROOT / "pypy-packages.json"
+RANKING = ROOT / "pypi-packages.json"
 PIP = Wheel(
     PYPI + "5d/95/6b5cb3461ea5673ba0995989746db58eb18b91b54dbf331e72f569540946/pip-26.1.2-py3-none-any.whl",
     "382ff9f685ee3bc25864f820aa50505825f10f5458ffff07e30a6d96e5715cab",
@@ -177,20 +177,25 @@ def site_directories(prefix):
     return [str(path) for path in sorted(prefix.glob("**/site-packages")) if path.is_dir()]
 
 
+def install_arguments(prefix, runtime):
+    # --prefix keeps the interpreter's bundled distributions visible to pip,
+    # such as cffi on PyPy. --target would reinstall them from PyPI.
+    arguments = [
+        "--isolated", "--disable-pip-version-check", "--no-input", "--no-cache-dir",
+        "install", "--only-binary=:all:", "--index-url", "https://pypi.org/simple/",
+        "--timeout", "10", "--retries", "1", "--no-warn-script-location", "--prefix", str(prefix),
+    ]
+    if runtime == "graalpy":
+        arguments.extend(("--extra-index-url", "https://gds.oracle.com/repositories/pypi/public-release/"))
+    return arguments
+
+
 def install_and_import(package, runtime, executable, root, pip, tag):
     project, version = package["project"], package["version"]
     with TemporaryDirectory(prefix=f"{runtime}-{project}-", dir=root) as temporary:
         working = Path(temporary)
         prefix = working / "prefix"
-        # --prefix keeps the interpreter's bundled distributions visible to pip,
-        # such as cffi on PyPy. --target would reinstall them from PyPI.
-        arguments = [
-            "--isolated", "--disable-pip-version-check", "--no-input", "--no-cache-dir",
-            "install", "--only-binary=:all:", "--index-url", "https://pypi.org/simple/",
-            "--timeout", "10", "--retries", "1", "--no-warn-script-location", "--prefix", str(prefix),
-        ]
-        if runtime == "graalpy":
-            arguments.extend(("--extra-index-url", "https://gds.oracle.com/repositories/pypi/public-release/"))
+        arguments = install_arguments(prefix, runtime)
         try:
             installation = launch(executable, working, "-c", START_PIP, str(pip),
                                   *arguments, f"{project}=={version}", timeout=65)

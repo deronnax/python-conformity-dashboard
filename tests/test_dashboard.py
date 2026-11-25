@@ -70,7 +70,7 @@ class GenerateTests(unittest.TestCase):
         pages, saved = render(report())
         self.assertEqual(saved["reference"], "3.11.17")
         for language, page in pages.items():
-            for anchor in ("pypy-packages", "applications", "shared-cases", "cpython-tests"):
+            for anchor in ("pypi-packages", "applications", "shared-cases", "cpython-tests"):
                 self.assertIn(f'id="{anchor}"', page)
                 self.assertIn(f'href="#{anchor}"', page)
             self.assertIn(TRANSLATIONS[language]["statuses"]["otherAbi"], page)

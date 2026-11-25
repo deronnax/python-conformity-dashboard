@@ -16,7 +16,7 @@ from dashboard_content import TRANSLATIONS
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"packages": "pypy-packages", "applications": "applications", "common": "shared-cases", "upstream": "cpython-tests"}
+VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": "shared-cases", "upstream": "cpython-tests"}
 OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
 
 
