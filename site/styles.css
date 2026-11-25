@@ -16,7 +16,6 @@ body { margin: 0; }
 main { max-width: 75rem; margin: 0 auto; padding: clamp(1rem, 4vw, 3.75rem); }
 h1 { font-size: clamp(2.25rem, 6vw, 4.1rem); line-height: 1; letter-spacing: -.055em; margin: 0; }
 h2 { font-size: 1.45rem; line-height: 1.25; margin: 1.35rem 0 .7rem; }
-h3 { font-size: 1.05rem; line-height: 1.3; margin: 0 0 .45rem; }
 p { margin: 0; }
 a { color: var(--accent); text-underline-offset: .16em; }
 button, select { font: inherit; color: inherit; cursor: pointer; }
@@ -36,17 +35,10 @@ button, select { font: inherit; color: inherit; cursor: pointer; }
 .switch a { padding: .45rem .8rem; border-radius: .4rem; color: var(--ink); font-weight: 650; text-decoration: none; }
 .switch a[aria-current="location"] { color: #fff; background: var(--accent); }
 .description { margin: .8rem 0 1.1rem; color: var(--muted); }
-.use-case-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr)); gap: .75rem; }
-.use-case { padding: .9rem; border: 1px solid var(--line); border-radius: .65rem; }
-.use-case p { color: var(--muted); }
-.sources { display: flex; flex-wrap: wrap; gap: .25rem .75rem; margin: .65rem 0 0; padding: 0; list-style: none; font-size: .875rem; }
-#application-checks { margin-top: 1.75rem; }
-.application-table tbody th { width: 42%; }
 .package-results { margin-top: 1rem; }
 .package-table tbody th { width: auto; }
 .package-module { display: block; color: var(--muted); }
-.application-name { display: block; font-weight: 650; }
-.application-detail pre { margin: .45rem 0 0; max-inline-size: 28rem; max-block-size: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.package-detail pre { margin: .45rem 0 0; max-inline-size: 28rem; max-block-size: 12rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .summaries { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .7rem; }
 .summary-card { padding: .9rem; border: 1px solid var(--line); border-radius: .65rem; }
 .runtime-name { font-weight: 650; }

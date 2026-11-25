@@ -11,12 +11,12 @@ from pathlib import Path
 from string import Template
 from urllib.parse import quote
 
-from dashboard_content import TRANSLATIONS, USE_CASES
+from dashboard_content import TRANSLATIONS
 
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"uses": "use-cases", "packages": "pypy-packages", "common": "shared-cases", "upstream": "cpython-tests"}
+VIEWS = {"packages": "pypy-packages", "common": "shared-cases", "upstream": "cpython-tests"}
 
 
 def visible_runtimes(rows, runtimes):
@@ -44,7 +44,7 @@ def detailed_badge(outcome, language, copy):
     detail = outcome_detail(outcome, language)
     label = badge(outcome, copy)
     if detail:
-        return f'<details class="application-detail"><summary>{label}</summary><pre>{escape(detail)}</pre></details>'
+        return f'<details class="package-detail"><summary>{label}</summary><pre>{escape(detail)}</pre></details>'
     return label
 
 
@@ -136,51 +136,6 @@ def render_comparison(suite, report, language, copy):
       </section>"""
 
 
-def render_applications(report, language, copy):
-    rows = report.get("applications", [])
-    if not rows:
-        return f'<p>{escape(copy["appEmpty"])}</p>'
-    runtimes = visible_runtimes(rows, report["runtimes"])
-    listing = []
-    for row in rows:
-        name = f'{row["package"]} {row["version"]}'
-        description = copy["appNames"][row["id"]]
-        cells = [
-            f'<th scope="row"><span class="application-name">{escape(name)}</span>{escape(description)}</th>'
-        ]
-        for runtime in runtimes:
-            cells.append(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>')
-        listing.append("<tr>" + "".join(cells) + "</tr>")
-    return f"""<div class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0">
-        <table class="application-table">
-          {table_head((copy["appCase"],), runtimes)}
-          <tbody>{"".join(listing)}</tbody>
-        </table>
-      </div>"""
-
-
-def render_use_cases(report, language, copy):
-    cards = []
-    for case in USE_CASES:
-        entry = case[language]
-        sources = "".join(
-            f'<li><a href="{escape(url)}">{escape(label)}</a></li>'
-            for url, label in zip(case["urls"], entry["sources"], strict=True)
-        )
-        cards.append(f"""<article class="use-case">
-            <h3>{escape(entry["title"])}</h3>
-            <p>{escape(entry["text"])}</p>
-            <ul class="sources">{sources}</ul>
-          </article>""")
-    return f"""<section id="{VIEWS["uses"]}" data-dashboard-panel>
-        <h2>{escape(copy["usesTitle"])}</h2>
-        <div class="use-case-grid">{"".join(cards)}</div>
-        <h2 id="application-checks">{escape(copy["appTitle"])}</h2>
-        <p class="description">{escape(copy["appMethod"])}</p>
-        {render_applications(report, language, copy)}
-      </section>"""
-
-
 def render_packages(report, language, copy):
     heading = f'<h2>{escape(copy["packagesTitle"])}</h2>'
     ranking = report.get("packages")
@@ -213,9 +168,6 @@ def render_packages(report, language, copy):
         {heading}
         <p class="description">{escape(window)} · <a href="{escape(ranking["source"])}">ClickPy</a></p>
         <p class="description">{escape(copy["packagesMethod"])}</p>
-        <div class="summaries" aria-label="{escape(copy["summaries"])}">
-          {render_summaries(rows, runtimes, copy)}
-        </div>
         <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
           <table class="package-table">
             {table_head(labels, runtimes)}
@@ -243,7 +195,6 @@ def render_page(report, language, template, assets):
         timestamp=escape(stamp),
         platform=escape(report["platform"]),
         referenceVersion=escape(report["reference"]),
-        useCases=render_use_cases(report, language, copy),
         packages=render_packages(report, language, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
