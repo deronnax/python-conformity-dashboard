@@ -1,76 +1,52 @@
 <!doctype html>
-<html lang="en">
+<html lang="$lang">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Python Conformity</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="dashboard.js" defer></script>
+  <meta name="description" content="$subtitle">
+  <title>$title</title>
+  <link rel="alternate" hreflang="en" href="${base}index.html">
+  <link rel="alternate" hreflang="fr" href="$frenchPage">
+  <link rel="stylesheet" href="${base}styles.css?v=$styleVersion">
+  <script src="${base}dashboard.js?v=$scriptVersion" defer></script>
 </head>
 <body>
   <main>
     <header class="page-header">
       <div>
-        <h1 data-message="title">Python Conformity</h1>
-        <p data-message="subtitle">Compare Python implementations by use case, application and standard library behavior.</p>
+        <h1>$title</h1>
+        <p>$subtitle</p>
       </div>
       <div class="header-actions">
-        <label class="language-control">
-          <span data-message="language">Language</span>
-          <select id="language">
-            <option value="en" lang="en">English</option>
-            <option value="fr" lang="fr">Français</option>
-          </select>
-        </label>
-        <a class="download" href="results.json" data-message="download" download>Download results (JSON)</a>
+        <details class="language-control">
+          <summary>$language</summary>
+          <ul>
+            <li><a lang="en" hreflang="en" href="${base}index.html?lang=en" data-language-link$englishCurrent>English</a></li>
+            <li><a lang="fr" hreflang="fr" href="$frenchPage?lang=fr" data-language-link$frenchCurrent>Français</a></li>
+          </ul>
+        </details>
+        <a class="download" href="${base}results.json" download>$download</a>
       </div>
     </header>
-    <p class="metadata" id="metadata"></p>
+    <p class="metadata">$reference $referenceVersion · $platform · <time datetime="$generatedAt">$timestamp</time></p>
 
-    <section class="comparison" data-label="comparison" aria-label="Comparison results">
-      <div class="switch" role="group" data-label="suite" aria-label="Dashboard view">
-        <button type="button" data-suite="uses" data-message="usesTab" aria-pressed="true" aria-controls="use-cases">Use cases</button>
-        <button type="button" data-suite="common" data-message="commonTab" aria-pressed="false" aria-controls="api-comparison">Shared cases</button>
-        <button type="button" data-suite="upstream" data-message="upstreamTab" aria-pressed="false" aria-controls="api-comparison">CPython tests</button>
-      </div>
-      <div id="use-cases">
-        <h2 data-message="usesTitle">Why choose a different Python?</h2>
-        <div id="use-case-list" class="use-case-grid"></div>
-        <h2 id="application-checks" data-message="appTitle">Application checks</h2>
-        <p class="description" data-message="appMethod"></p>
-        <p id="application-empty" data-message="appEmpty" hidden></p>
-        <div id="application-table" class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0" hidden>
-          <table>
-            <thead id="application-head"></thead>
-            <tbody id="application-body"></tbody>
-          </table>
-        </div>
-      </div>
-      <div id="api-comparison" hidden>
-        <p id="description" class="description"></p>
-        <div id="summaries" class="summaries" data-label="summaries" aria-label="Results by interpreter"></div>
-        <div class="filters">
-          <label><span data-message="module">Module</span> <select id="module"></select></label>
-          <label class="only-differences"><input type="checkbox" id="only-differences"> <span data-message="onlyDifferences">Differences and unmeasured cases</span></label>
-          <span id="count" role="status"></span>
-        </div>
-        <div class="table-scroll" role="region" data-label="caseTable" aria-label="Test case table" tabindex="0">
-          <table>
-            <thead id="table-head"></thead>
-            <tbody id="table-body"></tbody>
-          </table>
-        </div>
-      </div>
+    <section class="comparison" aria-label="$comparison">
+      <nav class="switch" aria-label="$suite">
+        <a href="#use-cases" data-dashboard-link>$usesTab</a>
+        <a href="#shared-cases" data-dashboard-link>$commonTab</a>
+        <a href="#cpython-tests" data-dashboard-link>$upstreamTab</a>
+      </nav>
+      $useCases
+      $common
+      $upstream
     </section>
 
     <details class="methodology">
-      <summary data-message="methodology">Methodology and scope</summary>
-      <p data-message="methodCases"></p>
-      <p data-message="methodUpstream"></p>
-      <p data-message="methodScope"></p>
+      <summary>$methodology</summary>
+      <p>$methodCases</p>
+      <p>$methodUpstream</p>
+      <p>$methodScope</p>
     </details>
-    <noscript>JavaScript is required to display and filter the table. The results are available as JSON.</noscript>
   </main>
-  <script type="application/json" id="results"><!-- RESULTS --></script>
 </body>
 </html>

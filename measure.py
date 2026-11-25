@@ -18,6 +18,7 @@ from urllib.request import urlretrieve
 
 from applications import application_results
 from corpus import CPYTHON_VERSION, PROBES, UPSTREAM, source_url
+from dashboard import generate
 
 
 ROOT = Path(__file__).resolve().parent
@@ -197,17 +198,6 @@ def upstream_results(executables, tests, cwd):
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
                          "source": source_url(method), "sourceTest": method, "outcomes": outcomes})
     return rows
-
-
-def generate(report, output):
-    output.mkdir(parents=True, exist_ok=True)
-    data = json.dumps(report, indent=2, ensure_ascii=False)
-    (output / "results.json").write_text(data + "\n", encoding="utf-8")
-    for asset in ("dashboard.js", "styles.css"):
-        shutil.copyfile(ROOT / "site" / asset, output / asset)
-    template = (ROOT / "site" / "index.html").read_text(encoding="utf-8")
-    (output / "index.html").write_text(template.replace("<!-- RESULTS -->", data.replace("<", r"\u003c")),
-                                       encoding="utf-8")
 
 
 def main():

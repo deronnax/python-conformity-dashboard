@@ -16,6 +16,8 @@ La commande télécharge l’archive source officielle de CPython, vérifie son 
 
 Le dashboard s’affiche en anglais par défaut et en français si c’est la première langue prise en charge dans les préférences du navigateur. Le menu de langue permet de choisir une autre langue et mémorise ce choix.
 
+Le rendu des deux pages et des tableaux est réalisé en Python avec la bibliothèque standard. Le navigateur gère la préférence de langue et les filtres. Pour régénérer le site à partir d’un rapport existant, utiliser `python3 -B dashboard.py dist/results.json`. Les pages générées sont `dist/index.html` et `dist/fr/index.html`.
+
 `--applications` télécharge dans le dossier temporaire les distributions épinglées de Django 5.2.19, Bottle 0.13.4 et NumPy 2.4.4. Il vérifie leurs empreintes et les extrait pour l’import, sans toucher aux environnements installés. L’essai NumPy vérifie le suffixe d’extension natif attendu par l’interpréteur sur Linux x86-64. Les scénarios testent le rendu Django, un agrégat avec annulation de transaction SQLite, une route WSGI Bottle et des opérations NumPy.
 
 `--rustpython /chemin/vers/rustpython` ajoute un [binaire RustPython](https://formulae.brew.sh/formula/rustpython). `--graalpy /chemin/vers/graalpy` ajoute le [binaire autonome GraalPy](https://github.com/oracle/graalpython/releases/tag/graal-25.5.5). Les deux options sont indépendantes.
