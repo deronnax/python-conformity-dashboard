@@ -56,14 +56,11 @@ def render_summaries(rows, runtimes, copy):
             for status, (singular, plural) in copy["totals"].items() if counts[status]
         )
         detail = f'<p class="summary-detail">{escape(breakdown)}</p>' if breakdown else ""
-        cards.append(f"""
-          <article class="summary-card">
+        cards.append(f"""<article class="summary-card">
             <p class="runtime-name" title="{escape(version)}">{escape(name)} {escape(build)}</p>
             <p class="score">{passed} / {len(rows)}</p>
-            <progress max="{len(rows)}" value="{passed}" aria-label="{escape(label)}"></progress>
-            {detail}
-          </article>
-        """)
+            <progress max="{len(rows)}" value="{passed}" aria-label="{escape(label)}"></progress>{detail}
+          </article>""")
     return "".join(cards)
 
 
@@ -103,8 +100,7 @@ def render_comparison(suite, report, language, copy):
     modules = sorted({row["module"] for row in rows})
     options = [f'<option value="">{escape(copy["allModules"])}</option>']
     options.extend(f'<option value="{escape(module)}">{escape(module)}</option>' for module in modules)
-    return f"""
-      <section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
+    return f"""<section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
         <h2>{escape(copy[suite + "Tab"])}</h2>
         <p class="description">{escape(copy["descriptions"][suite])}</p>
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
@@ -128,8 +124,7 @@ def render_comparison(suite, report, language, copy):
             </tbody>
           </table>
         </div>
-      </section>
-    """
+      </section>"""
 
 
 def render_applications(report, language, copy):
@@ -152,14 +147,12 @@ def render_applications(report, language, copy):
                 label = f'<details class="application-detail"><summary>{label}</summary><pre>{escape(detail)}</pre></details>'
             cells.append(f"<td>{label}</td>")
         listing.append("<tr>" + "".join(cells) + "</tr>")
-    return f"""
-      <div class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0">
+    return f"""<div class="table-scroll" role="region" aria-labelledby="application-checks" tabindex="0">
         <table class="application-table">
           {table_head(copy["appCase"], runtimes)}
           <tbody>{"".join(listing)}</tbody>
         </table>
-      </div>
-    """
+      </div>"""
 
 
 def render_use_cases(report, language, copy):
@@ -170,22 +163,18 @@ def render_use_cases(report, language, copy):
             f'<li><a href="{escape(url)}">{escape(label)}</a></li>'
             for url, label in zip(case["urls"], entry["sources"], strict=True)
         )
-        cards.append(f"""
-          <article class="use-case">
+        cards.append(f"""<article class="use-case">
             <h3>{escape(entry["title"])}</h3>
             <p>{escape(entry["text"])}</p>
             <ul class="sources">{sources}</ul>
-          </article>
-        """)
-    return f"""
-      <section id="{VIEWS["uses"]}" data-dashboard-panel>
+          </article>""")
+    return f"""<section id="{VIEWS["uses"]}" data-dashboard-panel>
         <h2>{escape(copy["usesTitle"])}</h2>
         <div class="use-case-grid">{"".join(cards)}</div>
         <h2 id="application-checks">{escape(copy["appTitle"])}</h2>
         <p class="description">{escape(copy["appMethod"])}</p>
         {render_applications(report, language, copy)}
-      </section>
-    """
+      </section>"""
 
 
 def render_page(report, language, template, assets):
