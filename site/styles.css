@@ -96,7 +96,11 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .status { display: inline-block; padding: .18rem .45rem; border-radius: .3rem; background: #e8edf2; color: #334860; font-weight: 650; white-space: nowrap; }
 .status.passed { background: #deefe5; color: #205536; }
 .status.different, .status.error, .status.installError, .status.importError, .status.crash, .status.internalError { background: #fbe7e1; color: #832d1a; }
-.status.missing, .status.noWheel { background: #fff0ca; color: #664500; }
+.status.missing, .status.noWheel, .status.dependency { background: #fff0ca; color: #664500; }
+.status.nativeOnly { background: #eef1f3; color: #4c6070; }
+.blocker { display: block; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
+.blockers { margin-top: 1rem; }
+.blockers summary { font-weight: 650; }
 .status.otherAbi, .status.otherPython { background: #e2ecf8; color: #1d4874; }
 /* Measurement problems say nothing about conformity, so they look provisional. */
 .status.blocked, .status.timeout, .status.installTimeout, .status.installerUnavailable, .status.unverified {

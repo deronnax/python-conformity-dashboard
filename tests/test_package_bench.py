@@ -99,5 +99,68 @@ class MissingWheelTests(unittest.TestCase):
         self.assertEqual(outcome, {"status": "noWheel", "detail": "ERROR: No matching distribution found for lxml==6.1.3"})
 
 
+RESOLUTION = """\
+ERROR: Cannot install jsonschema-specifications==2025.9.1 because these package versions have conflicting dependencies.
+
+The conflict is caused by:
+    jsonschema-specifications 2025.9.1 depends on referencing>=0.31.0
+    referencing 0.37.0 depends on rpds-py>=0.7.0; python_version >= "3.9"
+
+To fix this you could try to:
+1. loosen the range of package versions you've specified
+
+ERROR: ResolutionImpossible: for help visit https://pip.pypa.io/en/latest/topics/dependency-resolution/
+"""
+RPDS = {"2026.9.1": ["rpds_py-2026.9.1-pp312-pypy312_pp73-manylinux_2_28_x86_64.whl"],
+        "0.1.0": ["rpds_py-0.1.0.tar.gz"]}
+
+
+class BlockingDependencyTests(unittest.TestCase):
+    def test_reads_the_dependency_pip_found_no_wheel_for(self):
+        output = "ERROR: Could not find a version\nERROR: No matching distribution found for rpds-py>=0.25.0\n"
+        self.assertEqual(package_bench.blocking_requirements(output, "jsonschema"), [("rpds-py", ">=0.25.0")])
+
+    def test_the_package_itself_is_not_a_dependency(self):
+        output = "ERROR: No matching distribution found for cryptography==50.0.2"
+        self.assertEqual(package_bench.blocking_requirements(output, "cryptography"), [])
+
+    def test_reads_the_dependencies_of_a_resolution_conflict(self):
+        self.assertEqual(package_bench.blocking_requirements(RESOLUTION, "jsonschema-specifications"),
+                         [("referencing", ">=0.31.0"), ("rpds-py", ">=0.7.0")])
+
+    def test_explains_why_the_dependency_has_no_usable_wheel(self):
+        with mock.patch.object(package_bench, "project_releases", return_value=RPDS):
+            blocker = package_bench.describe_dependency("rpds-py", ">=0.25.0", PYPY_8)
+        self.assertEqual(blocker, {"name": "rpds-py", "requirement": "rpds-py>=0.25.0", "version": "2026.9.1",
+                                   "cause": "otherAbi", "published": ["pypy312_pp73"]})
+
+    def test_an_unreachable_index_keeps_the_requirement_only(self):
+        with mock.patch.object(package_bench, "project_releases", side_effect=OSError("offline")):
+            blocker = package_bench.describe_dependency("rpds-py", ">=0.25.0", PYPY_8)
+        self.assertEqual(blocker, {"name": "rpds-py", "requirement": "rpds-py>=0.25.0"})
+
+    def test_a_blocked_installation_names_its_dependency(self):
+        output = "ERROR: No matching distribution found for rpds-py>=0.25.0"
+        with mock.patch.object(package_bench, "project_releases", return_value=RPDS):
+            outcome = package_bench.blocked_by({"project": "jsonschema"}, output, PYPY_8, Path("/tmp/bench"))
+        self.assertEqual(outcome["status"], "dependency")
+        self.assertEqual(outcome["blocker"]["name"], "rpds-py")
+        self.assertIsNone(package_bench.blocked_by({"project": "rpds-py"}, output.replace(">=0.25.0", "==2026.9.1"),
+                                                   PYPY_8, Path("/tmp/bench")))
+
+
+class PurePythonTests(unittest.TestCase):
+    def test_detects_a_pure_python_wheel(self):
+        files = ["requests-2.34.2-py3-none-any.whl", "requests-2.34.2.tar.gz"]
+        with mock.patch.object(package_bench, "release_files", return_value=files):
+            self.assertTrue(package_bench.pure_python({"project": "requests", "version": "2.34.2"}))
+        with mock.patch.object(package_bench, "release_files", return_value=CRYPTOGRAPHY):
+            self.assertFalse(package_bench.pure_python({"project": "cryptography", "version": "50.0.2"}))
+
+    def test_native_packages_are_not_tested(self):
+        self.assertEqual(package_bench.native_only({"purePython": False})["status"], "nativeOnly")
+        self.assertEqual(package_bench.native_only({"purePython": None})["status"], "blocked")
+
+
 if __name__ == "__main__":
     unittest.main()

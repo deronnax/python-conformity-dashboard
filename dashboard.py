@@ -266,6 +266,50 @@ def render_applications(report, language, copy):
       </section>"""
 
 
+def blocker_text(blocker, copy):
+    """One sentence on the dependency that stopped an installation."""
+    name = blocker["name"] + (f" {blocker['version']}" if blocker.get("version") else "")
+    cause = blocker.get("cause")
+    if cause in ("otherAbi", "otherPython"):
+        return copy["blockerPublished"].format(name=name, published=", ".join(blocker["published"]))
+    if cause == "noWheel":
+        return copy["blockerNoWheel"].format(name=name)
+    return copy["blockerUnknown"].format(name=blocker["requirement"])
+
+
+def package_cell(outcome, language, copy):
+    blocker = outcome.get("blocker")
+    if not blocker:
+        return detailed_badge(outcome, language, copy)
+    detail = blocker_text(blocker, copy) + "\n\n" + outcome_detail(outcome, language)
+    return (f'<details class="package-detail"><summary>{badge(outcome, copy)}</summary><pre>{escape(detail.strip())}</pre>'
+            f'</details><span class="blocker">{escape(copy["blockerVia"])} <code>{escape(blocker["name"])}</code></span>')
+
+
+def render_blockers(rows, runtimes, copy):
+    """Dependencies that stopped other packages, with the packages they stopped."""
+    blocked = {}
+    for row in rows:
+        for runtime in runtimes:
+            blocker = row["outcomes"][runtime["id"]].get("blocker")
+            if blocker:
+                blocked.setdefault(blocker["name"], {}).setdefault(runtime["id"], []).append(row["project"])
+    if not blocked:
+        return ""
+    shown = [runtime for runtime in runtimes if any(runtime["id"] in by for by in blocked.values())]
+    body = []
+    for name, by in sorted(blocked.items(), key=lambda item: (-sum(map(len, item[1].values())), item[0].lower())):
+        cells = "".join(f'<td>{escape(", ".join(by.get(runtime["id"], [])))}</td>' for runtime in shown)
+        body.append(f'<tr><th scope="row"><code>{escape(name)}</code></th>{cells}</tr>')
+    head = "".join(f'<th scope="col">{escape(runtime["name"])}</th>' for runtime in shown)
+    return f"""<details class="blockers">
+          <summary>{escape(copy["blockersTitle"])} ({len(blocked)})</summary>
+          <p class="description">{escape(copy["blockersIntro"])}</p>
+          <div class="table-scroll"><table><thead><tr><th scope="col">{escape(copy["blockerDependency"])}</th>{head}</tr></thead>
+          <tbody>{"".join(body)}</tbody></table></div>
+        </details>"""
+
+
 def render_packages(report, language, copy):
     heading = f'<h2>{escape(copy["packagesTitle"])}</h2>'
     ranking = report.get("packages")
@@ -289,7 +333,7 @@ def render_packages(report, language, copy):
             f'<code class="package-module">{escape(module)}</code></th>',
             f'<td class="column-downloads">{escape(downloads)}</td>',
         ]
-        cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
+        cells.extend(f'<td>{package_cell(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
         listing.append("<tr>" + "".join(cells) + "</tr>")
     last_date = date.fromisoformat(ranking["end"]) - timedelta(days=1)
     window = copy["packagesWindow"].format(start=ranking["start"], end=last_date)
@@ -305,6 +349,7 @@ def render_packages(report, language, copy):
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "packagesPassedOn", report["reference"])}
         </div>
+        {render_blockers(rows, runtimes, copy)}
         <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
           <table class="package-table">
             {table_head(labels, runtimes, classes=("column-rank", "", "column-downloads"), notes=abis)}

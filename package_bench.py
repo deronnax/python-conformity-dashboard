@@ -5,6 +5,7 @@ import os
 import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from functools import lru_cache
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.parse import quote
@@ -74,7 +75,10 @@ print(json.dumps(outcome))
 # Heavy scientific packages compile their bytecode on first import, and GraalPy
 # starts a JVM, so a short limit reports slowness as a failure.
 IMPORT_TIMEOUT = 60
-MISSING_DISTRIBUTION = re.compile(r"No matching distribution found for ([A-Za-z0-9][A-Za-z0-9._-]*)")
+MISSING_DISTRIBUTION = re.compile(r"No matching distribution found for ([A-Za-z0-9][A-Za-z0-9._-]*)(\S*)")
+# pip explains a ResolutionImpossible with lines such as
+# "    referencing 0.37.0 depends on rpds-py>=0.7.0".
+CONFLICT = re.compile(r"^\s+(\S+) \S+ depends on ([^;]+?)\s*(?:;.*)?$", re.MULTILINE)
 PLATFORM = re.compile(r"^(manylinux|musllinux|macosx|linux|win)(?:\d+|_\d+_\d+)?_(.+)$")
 
 
@@ -175,6 +179,89 @@ def other_python_versions(filenames, tag):
     return sorted(found, key=lambda name: [int(part) for part in re.findall(r"\d+", name)])
 
 
+@lru_cache(maxsize=None)
+def project_releases(project):
+    """Every release of a project on PyPI, as {version: [filenames]}."""
+    url = f"https://pypi.org/pypi/{quote(project, safe='')}/json"
+    with urlopen(url, timeout=20) as response:
+        return {version: [item["filename"] for item in files if not item.get("yanked")]
+                for version, files in json.load(response)["releases"].items()}
+
+
+def newest_matching(project, specifier):
+    """Newest stable release of project that satisfies specifier, or None.
+
+    pip's vendored packaging is used, so the harness needs no dependency of its own."""
+    try:
+        from pip._vendor.packaging.specifiers import InvalidSpecifier, SpecifierSet
+        from pip._vendor.packaging.version import InvalidVersion, Version
+    except ImportError:
+        return None
+    try:
+        allowed = SpecifierSet(specifier)
+    except InvalidSpecifier:
+        return None
+    candidates = []
+    for text, files in project_releases(project).items():
+        try:
+            version = Version(text)
+        except InvalidVersion:
+            continue
+        if files and not version.is_prerelease and version in allowed:
+            candidates.append((version, text))
+    return max(candidates)[1] if candidates else None
+
+
+def blocking_requirements(output, project):
+    """Requirements of other projects that stopped pip, as (name, specifier) pairs."""
+    found = {}
+    for match in MISSING_DISTRIBUTION.finditer(output):
+        if canonical(match[1]) != canonical(project):
+            found.setdefault(canonical(match[1]), (match[1], match[2]))
+    for match in CONFLICT.finditer(output):
+        requirement = re.match(r"([A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[^\]]*\])?\s*(.*)", match[2].strip())
+        if requirement and canonical(requirement[1]) != canonical(project):
+            found.setdefault(canonical(requirement[1]), (requirement[1], requirement[2].replace(" ", "")))
+    return list(found.values())
+
+
+def describe_dependency(name, specifier, tag):
+    """Why a dependency has no usable wheel: another ABI, another Python version, or none."""
+    blocker = {"name": name, "requirement": name + specifier}
+    try:
+        version = newest_matching(name, specifier)
+        files = project_releases(name).get(version, []) if version else []
+    except (OSError, ValueError, KeyError):
+        return blocker
+    if version:
+        blocker["version"] = version
+    if tag and files:
+        abis = foreign_abis(files, tag)
+        versions = other_python_versions(files, tag)
+        if abis:
+            blocker.update(cause="otherAbi", published=abis)
+        elif versions:
+            blocker.update(cause="otherPython", published=versions)
+        else:
+            blocker["cause"] = "noWheel"
+    return blocker
+
+
+def blocked_by(package, output, tag, root):
+    """Attribute a failed installation to the dependency that stopped it, when pip names one."""
+    requirements = blocking_requirements(output, package["project"])
+    if not requirements:
+        return None
+    blocker = describe_dependency(*requirements[0], tag)
+    detail = output.strip().splitlines()
+    detail = "\n".join(line for line in detail if line.startswith("ERROR:") or "depends on" in line)
+    outcome = result("dependency", detail.replace(str(root), "<test directory>")[:1000])
+    outcome["blocker"] = blocker
+    if len(requirements) > 1:
+        outcome["otherBlockers"] = [name for name, _ in requirements[1:]]
+    return outcome
+
+
 def release_files(project, version):
     url = f"https://pypi.org/pypi/{quote(project, safe='')}/{quote(version, safe='')}/json"
     with urlopen(url, timeout=20) as response:
@@ -241,6 +328,10 @@ def install_and_import(package, runtime, executable, root, pip, tag):
         except OSError:
             return result("blocked")
         if installation.returncode:
+            output = installation.stderr + installation.stdout
+            dependency = blocked_by(package, output, tag, root)
+            if dependency:
+                return dependency
             for line in reversed(installation.stderr.splitlines()):
                 if "No matching distribution found" in line:
                     return missing_wheel(package, line, tag, root)
@@ -275,7 +366,26 @@ def wheel_tag(executable, root, pip):
         return None
 
 
-def package_results(executables, directory, ranking_path):
+def pure_python(package):
+    """True when the pinned release publishes a wheel that any interpreter can install."""
+    try:
+        files = release_files(package["project"], package["version"])
+    except (OSError, ValueError, KeyError):
+        return None
+    return any(name.endswith("-none-any.whl") for name in files)
+
+
+def native_only(package):
+    if package["purePython"] is None:
+        return result("blocked", "PyPI did not list the release files.",
+                      detail_fr="PyPI n’a pas donné la liste des fichiers de la version.")
+    return result("nativeOnly", "The release publishes no pure-Python wheel.",
+                  detail_fr="La version ne publie aucun wheel purement Python.")
+
+
+def package_results(executables, directory, ranking_path, pure_only=()):
+    """Install and import each ranked package. Interpreters in pure_only, which cannot
+    load extension modules, are tested only on releases with a pure-Python wheel."""
     ranking = json.loads(Path(ranking_path).read_text(encoding="utf-8"))
     root = directory / "package-bench"
     root.mkdir()
@@ -286,6 +396,12 @@ def package_results(executables, directory, ranking_path):
         for package in ranking["items"]:
             package["outcomes"] = {runtime: result("installerUnavailable") for runtime in executables}
         return ranking
+    # The harness reads requirements with pip's vendored packaging.
+    import sys
+    if str(pip) not in sys.path:
+        sys.path.append(str(pip))
+    for package in ranking["items"]:
+        package["purePython"] = pure_python(package)
     active = {}
     unavailable = {}
     tags = {}
@@ -309,12 +425,14 @@ def package_results(executables, directory, ranking_path):
             {
                 runtime: executor.submit(install_and_import, package, runtime, executable, root, pip, tags.get(runtime))
                 for runtime, executable in active.items()
+                if runtime not in pure_only or package["purePython"]
             }
             for package in ranking["items"]
         ]
         for package, checks in zip(ranking["items"], tasks):
             package["outcomes"] = {
-                runtime: checks[runtime].result() if runtime in checks else unavailable[runtime]
+                runtime: checks[runtime].result() if runtime in checks
+                else unavailable.get(runtime) or native_only(package)
                 for runtime in executables
             }
     return ranking
