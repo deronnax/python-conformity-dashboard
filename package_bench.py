@@ -2,10 +2,13 @@
 
 import json
 import os
+import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from urllib.parse import quote
+from urllib.request import urlopen
 from zipfile import BadZipFile
 
 from applications import PYPI, Wheel, prepare
@@ -26,17 +29,33 @@ sys.path.insert(0, sys.argv.pop(1))
 runpy.run_module("pip", run_name="__main__")
 """
 
+# pip selects wheels with the first tag of this list, so it names the ABI the
+# interpreter actually requires.
+WHEEL_TAG = """
+import json
+import sys
+
+sys.path.insert(0, sys.argv[1])
+from pip._vendor.packaging.tags import sys_tags
+
+tag = next(iter(sys_tags()))
+print(json.dumps({"interpreter": tag.interpreter, "abi": tag.abi, "platform": tag.platform}))
+"""
+
 IMPORT_PACKAGE = """
 from importlib import import_module, metadata
 from pathlib import Path
 import json
+import os
 import site
 import sys
 
-directory, project, version, name = sys.argv[1:]
-sys.path.insert(0, directory)
-site.addsitedir(directory)
-installed_directory = Path(directory).resolve()
+directories, project, version, name = sys.argv[1:]
+installed_directories = []
+for directory in reversed(directories.split(os.pathsep)):
+    sys.path.insert(0, directory)
+    site.addsitedir(directory)
+    installed_directories.append(Path(directory).resolve())
 try:
     installed = metadata.version(project)
     if installed != version:
@@ -44,7 +63,7 @@ try:
     module = import_module(name)
     filename = getattr(module, "__file__", None)
     paths = [filename] if filename else getattr(module, "__path__", ())
-    if not any(Path(path).resolve().is_relative_to(installed_directory) for path in paths):
+    if not any(Path(path).resolve().is_relative_to(installed) for path in paths for installed in installed_directories):
         raise ImportError(f"{name} resolved outside the package directory")
 except Exception as exc:
     outcome = {"status": "importError", "detail": f"{type(exc).__name__}: {exc}"}
@@ -52,6 +71,12 @@ else:
     outcome = {"status": "passed", "detail": ""}
 print(json.dumps(outcome))
 """
+
+# Heavy scientific packages compile their bytecode on first import, and GraalPy
+# starts a JVM, so a short limit reports slowness as a failure.
+IMPORT_TIMEOUT = 60
+MISSING_DISTRIBUTION = re.compile(r"No matching distribution found for ([A-Za-z0-9][A-Za-z0-9._-]*)")
+PLATFORM = re.compile(r"^(manylinux|musllinux|macosx|linux|win)(?:\d+|_\d+_\d+)?_(.+)$")
 
 
 def launch(executable, cwd, *arguments, timeout):
@@ -74,8 +99,11 @@ def launch(executable, cwd, *arguments, timeout):
     )
 
 
-def result(status, detail=""):
-    return {"status": status, "detail": detail}
+def result(status, detail="", *, detail_fr=None):
+    outcome = {"status": status, "detail": detail}
+    if detail_fr is not None:
+        outcome["detailFr"] = detail_fr
+    return outcome
 
 
 def diagnostic(completed, directory):
@@ -84,15 +112,82 @@ def diagnostic(completed, directory):
     return "\n".join((selected or lines)[-3:]).replace(str(directory), "<test directory>")[:1000]
 
 
-def install_and_import(package, runtime, executable, root, pip):
+def canonical(name):
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def platform_family(platform):
+    match = PLATFORM.match(platform)
+    if not match:
+        return platform, ""
+    system = "linux" if match[1] in ("manylinux", "musllinux", "linux") else match[1]
+    return system, match[2]
+
+
+def foreign_abis(filenames, tag):
+    """Return the ABIs of wheels built for this interpreter tag and platform but another ABI.
+
+    A PyPy 3.11 wheel tagged pp311-pypy311_pp73 matches a PyPy 8 interpreter
+    (pp311, pypy311_pp80) except for its ABI. A pp310 wheel targets another
+    Python version and does not count.
+    """
+    system, machine = platform_family(tag["platform"])
+    found = set()
+    for filename in filenames:
+        if not filename.endswith(".whl"):
+            continue
+        interpreters, abis, platforms = filename[:-4].split("-")[-3:]
+        if tag["interpreter"] not in interpreters.split("."):
+            continue
+        if not any(
+            platform_family(name)[0] == system and (platform_family(name)[1] in (machine, "universal2"))
+            for name in platforms.split(".")
+        ):
+            continue
+        found.update(abi for abi in abis.split(".") if abi not in ("none", "abi3", tag["abi"]))
+    return sorted(found)
+
+
+def release_files(project, version):
+    url = f"https://pypi.org/pypi/{quote(project, safe='')}/{quote(version, safe='')}/json"
+    with urlopen(url, timeout=20) as response:
+        return [item["filename"] for item in json.load(response)["urls"]]
+
+
+def missing_wheel(package, line, tag, root):
+    """Separate a release published for another ABI of this implementation from a missing wheel."""
+    detail = line.replace(str(root), "<test directory>")
+    match = MISSING_DISTRIBUTION.search(line)
+    if tag and match and canonical(match[1]) == canonical(package["project"]):
+        try:
+            abis = foreign_abis(release_files(package["project"], package["version"]), tag)
+        except (OSError, ValueError, KeyError):
+            abis = []
+        if abis:
+            published = ", ".join(abis)
+            return result(
+                "otherAbi",
+                f"Wheels published for {published}. This interpreter requires {tag['abi']}.",
+                detail_fr=f"Wheels publiés pour {published}. Cet interpréteur exige {tag['abi']}.",
+            )
+    return result("noWheel", detail)
+
+
+def site_directories(prefix):
+    return [str(path) for path in sorted(prefix.glob("**/site-packages")) if path.is_dir()]
+
+
+def install_and_import(package, runtime, executable, root, pip, tag):
     project, version = package["project"], package["version"]
     with TemporaryDirectory(prefix=f"{runtime}-{project}-", dir=root) as temporary:
         working = Path(temporary)
-        site = working / "packages"
+        prefix = working / "prefix"
+        # --prefix keeps the interpreter's bundled distributions visible to pip,
+        # such as cffi on PyPy. --target would reinstall them from PyPI.
         arguments = [
             "--isolated", "--disable-pip-version-check", "--no-input", "--no-cache-dir",
             "install", "--only-binary=:all:", "--index-url", "https://pypi.org/simple/",
-            "--timeout", "10", "--retries", "1", "--target", str(site),
+            "--timeout", "10", "--retries", "1", "--no-warn-script-location", "--prefix", str(prefix),
         ]
         if runtime == "graalpy":
             arguments.extend(("--extra-index-url", "https://gds.oracle.com/repositories/pypi/public-release/"))
@@ -106,12 +201,16 @@ def install_and_import(package, runtime, executable, root, pip):
         if installation.returncode:
             for line in reversed(installation.stderr.splitlines()):
                 if "No matching distribution found" in line:
-                    return result("noWheel", line.replace(str(root), "<test directory>"))
+                    return missing_wheel(package, line, tag, root)
             return result("installError", diagnostic(installation, root))
 
+        directories = site_directories(prefix)
+        if not directories:
+            return result("installError", "pip did not create a site-packages directory.",
+                          detail_fr="pip n’a pas créé de dossier site-packages.")
         try:
-            imported = launch(executable, working, "-c", IMPORT_PACKAGE, str(site), project, version,
-                              package["module"], timeout=20)
+            imported = launch(executable, working, "-c", IMPORT_PACKAGE, os.pathsep.join(directories), project,
+                              version, package["module"], timeout=IMPORT_TIMEOUT)
         except subprocess.TimeoutExpired:
             return result("timeout")
         except OSError:
@@ -124,6 +223,14 @@ def install_and_import(package, runtime, executable, root, pip):
             return result("blocked", diagnostic(imported, root))
         outcome["detail"] = outcome["detail"].replace(str(root), "<test directory>")[:1000]
         return outcome
+
+
+def wheel_tag(executable, root, pip):
+    try:
+        completed = launch(executable, root, "-c", WHEEL_TAG, str(pip), timeout=20)
+        return json.loads(completed.stdout.splitlines()[-1]) if completed.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, IndexError, ValueError):
+        return None
 
 
 def package_results(executables, directory):
@@ -139,6 +246,7 @@ def package_results(executables, directory):
         return ranking
     active = {}
     unavailable = {}
+    tags = {}
     for runtime, executable in executables.items():
         try:
             check = launch(executable, root, "-c", START_PIP, str(pip), "--version", timeout=20)
@@ -149,11 +257,15 @@ def package_results(executables, directory):
                 unavailable[runtime] = result("installerUnavailable", diagnostic(check, root))
             else:
                 active[runtime] = executable
+                tag = wheel_tag(executable, root, pip)
+                if tag:
+                    tags[runtime] = tag
+    ranking["tags"] = tags
 
     with ThreadPoolExecutor(max_workers=4) as executor:
         tasks = [
             {
-                runtime: executor.submit(install_and_import, package, runtime, executable, root, pip)
+                runtime: executor.submit(install_and_import, package, runtime, executable, root, pip, tags.get(runtime))
                 for runtime, executable in active.items()
             }
             for package in ranking["items"]
