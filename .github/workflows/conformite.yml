@@ -56,13 +56,13 @@ jobs:
           set -euo pipefail
           "$RUNNER_TEMP/conformite/cpython/bin/python3.11" -B -m unittest discover -s tests
 
-      - name: Compiler RustPython avec SQLite
+      - name: Compiler RustPython
         shell: bash
         working-directory: ${{ runner.temp }}/conformite/rustpython-src
         run: |
           set -euo pipefail
           rustup toolchain install 1.99.0 --profile minimal
-          cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
+          cargo +1.99.0 build --release --locked --features freeze-stdlib --bin rustpython
 
       - name: Mesurer et générer le dashboard
         shell: bash

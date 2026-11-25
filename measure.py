@@ -31,6 +31,9 @@ ARCHIVE_URL = f"https://www.python.org/ftp/python/{CPYTHON_VERSION}/{ARCHIVE}"
 ARCHIVE_SHA256 = "bfb74ad39efae27cda510f134ab408e00f9992c56851cfc0b1cdb5646da11599"
 RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
                  "freethreaded": "CPython 3.14t"}
+# Measured for speed and thread scaling only: RustPython has no C API, so it cannot
+# run extension modules and the conformity suites would mostly measure that.
+PERFORMANCE_ONLY = {"rustpython"}
 # sys.implementation.name reported by each runtime id.
 IMPLEMENTATIONS = {"freethreaded": "cpython"}
 
@@ -256,7 +259,7 @@ def main():
     parser.add_argument("--cpython", default=sys.executable, help=f"Binaire de référence {CPYTHON_VERSION}")
     parser.add_argument("--pypy", default="pypy3.11", help=f"Binaire PyPy ciblant Python {CPYTHON_VERSION}")
     parser.add_argument("--graalpy", help="Binaire GraalPy autonome. Ajouté au corpus commun si fourni.")
-    parser.add_argument("--rustpython", help="Binaire RustPython. Ajouté au corpus commun si fourni.")
+    parser.add_argument("--rustpython", help="Binaire RustPython. Mesuré en performance et en threads seulement.")
     parser.add_argument("--freethreaded", help="Binaire CPython 3.14 sans GIL. Ajouté au corpus commun si fourni.")
     parser.add_argument("--history", type=Path, help="history.json d’une exécution précédente, complété par celle-ci")
     parser.add_argument("--benchmarks", action="store_true", help="Chronométrer des noyaux de calcul et des charges de la bibliothèque standard")
@@ -283,16 +286,17 @@ def main():
                 next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
             benchmarks = benchmark_results(executables, directory) if args.benchmarks else []
             tests = extract_tests(args.source, directory)
+            conformity = {runtime: path for runtime, path in executables.items() if runtime not in PERFORMANCE_ONLY}
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
                 "reference": CPYTHON_VERSION,
                 "runtimes": runtimes,
-                "common": comparisons(executables, directory),
-                "upstream": upstream_results(executables, tests, directory),
+                "common": comparisons(conformity, directory),
+                "upstream": upstream_results(conformity, tests, directory),
                 "benchmarks": benchmarks,
-                "applications": application_results(executables, directory, invoke) if args.applications else [],
-                "packages": package_results(executables, directory) if args.packages else None,
+                "applications": application_results(conformity, directory, invoke) if args.applications else [],
+                "packages": package_results(conformity, directory) if args.packages else None,
             }
             generate(report, args.output, load_history(args.history) if args.history else [])
     except (OSError, ValueError, subprocess.TimeoutExpired, tarfile.TarError) as exc:
@@ -305,7 +309,7 @@ def main():
             if outcomes:
                 print(f"{suite} / {runtime}: {outcomes.count('passed')}/{len(outcomes)} réussis")
     if report["packages"]:
-        for runtime in executables:
+        for runtime in report["packages"]["items"][0]["outcomes"]:
             counts = {}
             for package in report["packages"]["items"]:
                 status = package["outcomes"][runtime]["status"]
