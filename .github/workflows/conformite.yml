@@ -3,6 +3,10 @@ name: Conformité Python
 on:
   push:
     branches: [main]
+  # Package releases and wheels change without a push, so the dashboard is
+  # measured again every Monday.
+  schedule:
+    - cron: "23 5 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -44,6 +48,12 @@ jobs:
           extract bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d \
             https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython-src
 
+      - name: Tester le générateur et le harnais
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/conformite/cpython/bin/python3.11" -B -m unittest discover -s tests
+
       - name: Compiler RustPython avec SQLite
         shell: bash
         working-directory: ${{ runner.temp }}/conformite/rustpython-src
@@ -74,3 +84,27 @@ jobs:
           name: dashboard-conformite
           path: dist/
           if-no-files-found: error
+
+      - name: Préparer la publication GitHub Pages
+        if: ${{ success() && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: dist/
+
+  publier:
+    needs: mesure
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploiement.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Déployer sur GitHub Pages
+        id: deploiement
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
