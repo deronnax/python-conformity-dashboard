@@ -86,9 +86,12 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .case-detail { margin: .6rem .1rem .25rem 1.15rem; }
 .case-detail pre { font-size: .84rem; background: #eaf1f2; margin: .3rem 0 .55rem; padding: .5rem; border-radius: .3rem; white-space: pre-wrap; overflow-wrap: anywhere; }
 .detail-runtime { margin-top: .65rem; font-weight: 650; }
+.contract, .provenance { margin: .45rem 0 0; color: var(--muted); }
+.summary-detail.cross-version, .version-note { color: #664500; }
+.version-note { display: block; font-size: .8rem; }
 .status { display: inline-block; padding: .18rem .45rem; border-radius: .3rem; background: #e8edf2; color: #334860; font-weight: 650; white-space: nowrap; }
 .status.passed { background: #deefe5; color: #205536; }
-.status.different, .status.error, .status.installError, .status.importError, .status.crash { background: #fbe7e1; color: #832d1a; }
+.status.different, .status.error, .status.installError, .status.importError, .status.crash, .status.internalError { background: #fbe7e1; color: #832d1a; }
 .status.missing, .status.noWheel { background: #fff0ca; color: #664500; }
 .status.otherAbi { background: #e2ecf8; color: #1d4874; }
 /* Measurement problems say nothing about conformity, so they look provisional. */

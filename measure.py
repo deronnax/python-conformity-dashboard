@@ -46,9 +46,35 @@ def run(executable, *args, cwd, timeout=30):
                           capture_output=True, encoding="utf-8", errors="replace")
 
 
+# Reports the language version apart from the implementation version: PyPy 8.0.1
+# implements Python 3.12.15, for example.
+DESCRIBE = """
+import json, sys
+def version(info):
+    text = ".".join(str(part) for part in tuple(info)[:3])
+    level = getattr(info, "releaselevel", "final")
+    if level != "final":
+        text += {"alpha": "a", "beta": "b", "candidate": "rc"}.get(level, level) + str(getattr(info, "serial", ""))
+    return text
+print(json.dumps({"implementation": sys.implementation.name,
+                  "implementationVersion": version(sys.implementation.version),
+                  "language": version(sys.version_info), "version": sys.version,
+                  "cacheTag": sys.implementation.cache_tag}))
+"""
+
+
+def language_mismatch(language, reference=CPYTHON_VERSION):
+    """True when an interpreter implements another minor version than the reference."""
+    return language.split(".")[:2] != reference.split(".")[:2]
+
+
 def identify(executable, runtime, cwd):
-    info = run(executable, "-c", "import sys; print(sys.implementation.name); print(sys.version)", cwd=cwd)
-    name, _, version = info.stdout.strip().partition("\n")
+    info = run(executable, "-c", DESCRIBE, cwd=cwd)
+    try:
+        described = json.loads(info.stdout)
+    except ValueError:
+        described = {}
+    name, version = described.get("implementation"), described.get("version")
     if info.returncode or name != IMPLEMENTATIONS.get(runtime, runtime) or not version:
         raise ValueError(f"{executable} is not {RUNTIME_NAMES[runtime]}. {info.stderr.strip()}")
     if runtime in ("cpython", "pypy") and version.split()[0] != CPYTHON_VERSION:
@@ -57,7 +83,10 @@ def identify(executable, runtime, cwd):
         raise ValueError(f"GraalPy must target Python {CPYTHON_VERSION.rpartition('.')[0]}, got {version.split()[0]}.")
     if runtime == "freethreaded" and "free-threading build" not in version:
         raise ValueError(f"{executable} is not a free-threaded CPython build.")
-    return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version}
+    return {"id": runtime, "name": RUNTIME_NAMES[runtime], "version": version,
+            "implementation": name, "implementationVersion": described["implementationVersion"],
+            "language": described["language"], "cacheTag": described.get("cacheTag"),
+            "crossVersion": language_mismatch(described["language"])}
 
 
 def extract_tests(archive, directory):
@@ -92,6 +121,15 @@ def result(status, detail="", *, detail_fr=None):
     return outcome
 
 
+# Text that only appears when the interpreter itself fails, below the Python level.
+INTERNAL_FAILURES = ("java.lang.", "com.oracle.truffle.", "Fatal Python error", "RPython traceback",
+                     "panicked at")
+
+
+def internal_failure(text):
+    return any(marker in text for marker in INTERNAL_FAILURES)
+
+
 def invoke(executable, *args, cwd, timeout=30):
     try:
         completed = run(executable, *args, cwd=cwd, timeout=timeout)
@@ -101,8 +139,15 @@ def invoke(executable, *args, cwd, timeout=30):
     except OSError as exc:
         return result("blocked", str(exc))
     if completed.returncode:
-        status = "crash" if completed.returncode < 0 else "blocked"
         detail = completed.stderr.strip() or completed.stdout.strip()
+        # A host exception or a fatal error is a failure of the interpreter, not of the
+        # measurement. Any other exit stays blocked: the cause is unknown.
+        if completed.returncode < 0:
+            status = "crash"
+        elif internal_failure(detail):
+            status = "internalError"
+        else:
+            status = "blocked"
         if detail:
             return result(status, detail)
         return result(status, f"Exit code {completed.returncode}", detail_fr=f"Code de sortie {completed.returncode}")
@@ -169,7 +214,7 @@ def french_observation(observation):
     return observation
 
 
-def comparisons(executables, cwd):
+def comparisons(executables, cwd, lib=None):
     rows = []
     for probe in PROBES:
         baseline = observe(executables["cpython"], probe, cwd)
@@ -190,8 +235,8 @@ def comparisons(executables, cwd):
         snippet = "\n".join(part for part in (dedent(probe.setup).strip(), probe.expression) if part)
         snippet = snippet.replace("api(", probe.api + "(").replace("module.", probe.module + ".")
         rows.append({"id": probe.id, "module": probe.module, "api": probe.api, "title": probe.title,
-                     "titleFr": probe.title_fr,
-                     "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream),
+                     "titleFr": probe.title_fr, "contract": probe.contract, "contractSource": probe.contract_source,
+                     "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream, lib),
                      "sourceTest": probe.upstream, "outcomes": outcomes})
     return rows
 
@@ -257,7 +302,7 @@ def upstream_results(executables, tests, cwd):
                     outcomes[runtime] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
                                                detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
-                         "source": source_url(method), "sourceTest": method, "outcomes": outcomes})
+                         "source": source_url(method, tests.parent), "sourceTest": method, "outcomes": outcomes})
     return rows
 
 
@@ -299,7 +344,7 @@ def main():
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
                 "reference": CPYTHON_VERSION,
                 "runtimes": runtimes,
-                "common": comparisons(conformity, directory),
+                "common": comparisons(conformity, directory, tests.parent),
                 "upstream": upstream_results(conformity, tests, directory),
                 "benchmarks": benchmarks,
                 "applications": application_results(conformity, directory, invoke) if args.applications else [],

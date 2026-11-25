@@ -125,6 +125,54 @@ class GenerateTests(unittest.TestCase):
         self.assertNotIn("runtime-note", pages["en"])
 
 
+class ContractAndVersionTests(unittest.TestCase):
+    def data(self):
+        data = report()
+        row = data["common"][0]
+        row.update(contract="cpython_behavior", contractSource=None, source=None, sourceTest=None)
+        data["common"].append(dict(row, id="json-empty", module="json", api="json.loads",
+                                   contract="stdlib_spec",
+                                   contractSource="https://docs.python.org/3.12/library/json.html#json.loads",
+                                   source="https://example.test/test_json.py", sourceTest="test.test_json.Demo.test_empty"))
+        data["runtimes"].append({"id": "freethreaded", "name": "CPython 3.14t", "version": "3.14.9 free-threading build",
+                                 "language": "3.14.9", "implementationVersion": "3.14.9"})
+        for row in data["common"]:
+            row["outcomes"]["freethreaded"] = passed()
+        return data
+
+    def test_cases_show_their_contract_and_provenance(self):
+        pages, saved = render(self.data())
+        for language in ("en", "fr"):
+            copy = TRANSLATIONS[language]
+            page = pages[language]
+            self.assertIn(copy["contracts"]["cpython_behavior"], page)
+            self.assertIn('<a href="https://docs.python.org/3.12/library/json.html#json.loads">', page)
+            self.assertIn(copy["upstreamNone"], page)
+            self.assertIn(copy["upstreamSame"], page)
+            self.assertIn('data-contract="stdlib_spec"', page)
+            self.assertIn("<select data-contract-filter>", page)
+        self.assertEqual(saved["common"][0]["contract"], "cpython_behavior")
+
+    def test_cross_version_runtimes_are_labelled(self):
+        pages, _ = render(self.data())
+        note = TRANSLATIONS["en"]["crossVersionNote"].format(version="3.14")
+        self.assertIn(f'<span class="runtime-note">{note}</span>', pages["en"])
+        card = TRANSLATIONS["fr"]["crossVersionCard"].format(version="3.14.9", reference="3.12.15")
+        self.assertIn(card, pages["fr"].replace("&#x27;", "'"))
+
+    def test_the_interpreters_view_separates_release_and_language(self):
+        data = report()
+        data["runtimes"][1].update(language="3.12.15", implementationVersion="8.0.1")
+        pages, _ = render(data)
+        self.assertIn(">8.0.1</td>", pages["en"])
+        self.assertIn(TRANSLATIONS["en"]["implementationVersion"], pages["en"])
+
+    def test_reports_without_version_fields_still_render(self):
+        pages, _ = render(report())
+        self.assertIn(">8.0.1</td>", pages["en"])
+        self.assertNotIn("data-contract-filter", pages["en"])
+
+
 class InterpreterTests(unittest.TestCase):
     def test_shows_thread_scaling_and_failed_measurements(self):
         pages, _ = render(report())
