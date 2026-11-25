@@ -12,7 +12,7 @@ TRANSLATIONS = {
         "packagesTab": "PyPI packages",
         "packagesTitle": "Top 50 packages by PyPI downloads",
         "packagesWindow": "UTC downloads from {start} through {end}",
-        "packagesMethod": "The ranking counts every PyPI download of each project, whatever its version, file type or platform. Each check installs the pinned release and its dependencies from wheels, then imports the named module. A missing wheel can belong to the package or a dependency. “Other ABI only” means the release has wheels for this Python version and platform, built for another ABI of the interpreter, such as PyPy 7.3 (pp73) instead of PyPy 8 (pp80).",
+        "packagesMethod": "The ranking counts every PyPI download of each project, whatever its version, file type or platform. Each check installs the pinned release and its dependencies from wheels, then imports the named module. A missing wheel can belong to the package or a dependency. “Other ABI only” means the release has wheels for this Python version and platform, built for another ABI of the interpreter, such as PyPy 7.3 (pp73) instead of PyPy 8 (pp80). “Other Python version only” means the release has wheels for this interpreter and platform, but only for other Python versions, such as PyPy for Python 3.11 (pp311) on PyPy for Python 3.12 (pp312).",
         "packagesPassedOn": "Packages imported on {runtime}",
         "packagesEmpty": "Package checks were not run for this report.",
         "package": "Package and import",
@@ -90,10 +90,10 @@ TRANSLATIONS = {
         "module": "Module",
         "onlyDifferences": "Differences and unmeasured cases",
         "caseTable": "Test case table",
-        "performanceOnly": "RustPython is not tested here. It provides no C API, so extension modules cannot load on it and these results would mostly measure that. It appears in the Interpreters and Performance views.",
+        "performanceOnly": "RustPython is not in this view for now. It provides no C API, so packages with extension modules cannot load on it.",
         "methodology": "Methodology and scope",
         "methodCases": "Shared cases compare observed types and values with CPython. For invalid inputs, they check whether callers can catch the exception using the expected public class.",
-        "methodUpstream": "The CPython tests view runs selected upstream test methods on CPython, PyPy and GraalPy. The JSON test harness enables the CPython accelerator when available. Shared cases import the module as usual.",
+        "methodUpstream": "The CPython tests view runs selected upstream test methods on CPython, PyPy, GraalPy and RustPython. The JSON test harness enables the CPython accelerator when available. Shared cases import the module as usual.",
         "methodScope": "These results apply to the cases, versions and platform shown. The shared cases cover APIs available in the reference CPython version. A module can be unavailable in a specific build. Each row links to the source test.",
         "reference": "CPython reference",
         "source": "View source test",
@@ -111,12 +111,13 @@ TRANSLATIONS = {
         "descriptions": {
             "common": "Each interpreter runs the same calls. Values and exceptions are compared with the CPython reference.",
             "applications": "Small scenarios with pinned releases of Django, Bottle and NumPy, run on each interpreter from isolated wheel directories.",
-            "upstream": "Selected test methods from the CPython source tree, run on CPython, PyPy and GraalPy."
+            "upstream": "Selected test methods from the CPython source tree, run on CPython, PyPy, GraalPy and RustPython."
         },
         "statuses": {
             "passed": "Passed",
             "noWheel": "No wheel",
             "otherAbi": "Other ABI only",
+            "otherPython": "Other Python version only",
             "different": "Different",
             "missing": "Missing API",
             "skipped": "Skipped",
@@ -134,6 +135,7 @@ TRANSLATIONS = {
         "totals": {
             "noWheel": ["missing wheel", "missing wheels"],
             "otherAbi": ["wheel for another ABI only", "wheels for another ABI only"],
+            "otherPython": ["wheel for another Python version only", "wheels for another Python version only"],
             "installError": ["failed installation", "failed installations"],
             "installTimeout": ["installation timeout", "installation timeouts"],
             "installerUnavailable": ["installer unavailable", "installer unavailable"],
@@ -185,7 +187,7 @@ TRANSLATIONS = {
         "packagesTab": "Paquets PyPI",
         "packagesTitle": "Les 50 paquets les plus téléchargés sur PyPI",
         "packagesWindow": "Téléchargements du {start} au {end} en UTC",
-        "packagesMethod": "Le classement compte tous les téléchargements PyPI de chaque projet, quels que soient la version, le type de fichier et la plateforme. Chaque essai installe la version fixée et ses dépendances depuis des wheels, puis importe le module indiqué. Un wheel manquant peut concerner le paquet ou l’une de ses dépendances. « Autre ABI seulement » signifie que la version publie des wheels pour cette version de Python et cette plateforme, mais compilés pour une autre ABI de l’interpréteur, par exemple PyPy 7.3 (pp73) au lieu de PyPy 8 (pp80).",
+        "packagesMethod": "Le classement compte tous les téléchargements PyPI de chaque projet, quels que soient la version, le type de fichier et la plateforme. Chaque essai installe la version fixée et ses dépendances depuis des wheels, puis importe le module indiqué. Un wheel manquant peut concerner le paquet ou l’une de ses dépendances. « Autre ABI seulement » signifie que la version publie des wheels pour cette version de Python et cette plateforme, mais compilés pour une autre ABI de l’interpréteur, par exemple PyPy 7.3 (pp73) au lieu de PyPy 8 (pp80). « Autre version de Python seulement » signifie que la version publie des wheels pour cet interpréteur et cette plateforme, mais seulement pour d’autres versions de Python, par exemple PyPy pour Python 3.11 (pp311) face à PyPy pour Python 3.12 (pp312).",
         "packagesPassedOn": "Paquets importés sur {runtime}",
         "packagesEmpty": "Les essais de paquets n’ont pas été lancés pour ce rapport.",
         "package": "Paquet et module importé",
@@ -263,10 +265,10 @@ TRANSLATIONS = {
         "module": "Module",
         "onlyDifferences": "Écarts et cas non mesurés",
         "caseTable": "Tableau des cas",
-        "performanceOnly": "RustPython n’est pas testé ici. Il n’offre aucune API C : les modules d’extension ne peuvent pas s’y charger et ces résultats mesureraient surtout cela. Il figure dans les vues Interpréteurs et Performance.",
+        "performanceOnly": "RustPython n’est pas dans cette vue pour l’instant. Il n’offre aucune API C : les paquets qui ont des modules d’extension ne peuvent pas s’y charger.",
         "methodology": "Méthode et périmètre",
         "methodCases": "Les cas communs comparent les types et valeurs observés à ceux de CPython. Pour les entrées invalides, on vérifie que le code appelant peut intercepter l’exception avec la classe publique attendue.",
-        "methodUpstream": "La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython, PyPy et GraalPy. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.",
+        "methodUpstream": "La vue Tests CPython exécute une sélection de méthodes d’origine sur CPython, PyPy, GraalPy et RustPython. Pour JSON, le harnais active son accélérateur CPython uniquement s’il est disponible. Les cas communs chargent le module normalement.",
         "methodScope": "Les résultats portent sur ces cas, ces versions et cette plateforme. Les cas communs couvrent des API disponibles dans la version de référence de CPython. Un module peut être absent d’un binaire donné. Chaque ligne donne accès à son cas source.",
         "reference": "Référence CPython",
         "source": "Voir le test source",
@@ -284,12 +286,13 @@ TRANSLATIONS = {
         "descriptions": {
             "common": "Les mêmes appels sur chaque interpréteur. Chaque valeur ou exception est comparée à la référence CPython.",
             "applications": "De petits scénarios avec des versions épinglées de Django, Bottle et NumPy, exécutés sur chaque interpréteur depuis des dossiers de wheels isolés.",
-            "upstream": "Des méthodes de test sélectionnées dans le code source de CPython, exécutées sur CPython, PyPy et GraalPy."
+            "upstream": "Des méthodes de test sélectionnées dans le code source de CPython, exécutées sur CPython, PyPy, GraalPy et RustPython."
         },
         "statuses": {
             "passed": "Réussi",
             "noWheel": "Aucun wheel",
             "otherAbi": "Autre ABI seulement",
+            "otherPython": "Autre version de Python seulement",
             "different": "Différent",
             "missing": "API absente",
             "skipped": "Ignoré",
@@ -307,6 +310,7 @@ TRANSLATIONS = {
         "totals": {
             "noWheel": ["wheel manquant", "wheels manquants"],
             "otherAbi": ["wheel pour une autre ABI seulement", "wheels pour une autre ABI seulement"],
+            "otherPython": ["wheel pour une autre version de Python seulement", "wheels pour une autre version de Python seulement"],
             "installError": ["échec de l’installation", "échecs de l’installation"],
             "installTimeout": ["installation trop longue", "installations trop longues"],
             "installerUnavailable": ["installateur indisponible", "installateur indisponible"],

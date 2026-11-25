@@ -147,6 +147,34 @@ def foreign_abis(filenames, tag):
     return sorted(found)
 
 
+def other_python_versions(filenames, tag):
+    """Return the interpreter tags of wheels built for this implementation and platform,
+    but for another Python version.
+
+    cryptography 50.0.2 publishes pp311-pypy311_pp73 wheels for Linux and none for
+    pp312: a PyPy 3.12 interpreter finds no wheel, although the project builds for PyPy.
+    Version-independent wheels (abi3, none) do not count: when pip rejects them, the
+    reason is not the Python version.
+    """
+    implementation = re.match(r"[a-z]+", tag["interpreter"])[0]
+    system, machine = platform_family(tag["platform"])
+    found = set()
+    for filename in filenames:
+        if not filename.endswith(".whl"):
+            continue
+        interpreters, abis, platforms = filename[:-4].split("-")[-3:]
+        if all(abi in ("none", "abi3") for abi in abis.split(".")):
+            continue
+        if not any(
+            platform_family(name)[0] == system and (platform_family(name)[1] in (machine, "universal2"))
+            for name in platforms.split(".")
+        ):
+            continue
+        found.update(name for name in interpreters.split(".")
+                     if re.fullmatch(implementation + r"\d+", name) and name != tag["interpreter"])
+    return sorted(found, key=lambda name: [int(part) for part in re.findall(r"\d+", name)])
+
+
 def release_files(project, version):
     url = f"https://pypi.org/pypi/{quote(project, safe='')}/{quote(version, safe='')}/json"
     with urlopen(url, timeout=20) as response:
@@ -154,20 +182,30 @@ def release_files(project, version):
 
 
 def missing_wheel(package, line, tag, root):
-    """Separate a release published for another ABI of this implementation from a missing wheel."""
+    """Separate a release published for another ABI or another Python version of this
+    implementation from a missing wheel."""
     detail = line.replace(str(root), "<test directory>")
     match = MISSING_DISTRIBUTION.search(line)
     if tag and match and canonical(match[1]) == canonical(package["project"]):
         try:
-            abis = foreign_abis(release_files(package["project"], package["version"]), tag)
+            files = release_files(package["project"], package["version"])
         except (OSError, ValueError, KeyError):
-            abis = []
+            files = []
+        abis = foreign_abis(files, tag)
+        versions = other_python_versions(files, tag)
         if abis:
             published = ", ".join(abis)
             return result(
                 "otherAbi",
                 f"Wheels published for {published}. This interpreter requires {tag['abi']}.",
                 detail_fr=f"Wheels publiés pour {published}. Cet interpréteur exige {tag['abi']}.",
+            )
+        if versions:
+            published = ", ".join(versions)
+            return result(
+                "otherPython",
+                f"Wheels published for {published} only. This interpreter is {tag['interpreter']}.",
+                detail_fr=f"Wheels publiés pour {published} seulement. Cet interpréteur est {tag['interpreter']}.",
             )
     return result("noWheel", detail)
 

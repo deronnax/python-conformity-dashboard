@@ -53,7 +53,7 @@ def version_notes(runtimes, reference, copy):
 
 
 def performance_only_note(report, copy):
-    """Explain why RustPython is missing from the conformity views, when it was measured at all."""
+    """Explain why RustPython is missing from the package view, when it was measured at all."""
     if not any(runtime["id"] == "rustpython" for runtime in report["runtimes"]):
         return ""
     return f'<p class="description">{escape(copy["performanceOnly"])}</p>'
@@ -206,7 +206,6 @@ def render_comparison(suite, report, language, copy):
     return f"""<section id="{VIEWS[suite]}" data-dashboard-panel data-comparison>
         <h2>{escape(copy[suite + "Tab"])}</h2>
         <p class="description">{escape(copy["descriptions"][suite])}</p>
-        {performance_only_note(report, copy)}
         {contract_summary}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, reference=report["reference"])}
@@ -255,7 +254,6 @@ def render_applications(report, language, copy):
     return f"""<section id="{VIEWS["applications"]}" data-dashboard-panel>
         {heading}
         <p class="description">{escape(copy["descriptions"]["applications"])}</p>
-        {performance_only_note(report, copy)}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
           {render_summaries(rows, runtimes, copy, "applicationsPassedOn", report["reference"])}
         </div>

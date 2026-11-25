@@ -18,11 +18,12 @@ class UpstreamTests(unittest.TestCase):
                 mock.patch.object(measure, "invoke", invoke):
             return measure.upstream_results(executables, Path("tests-root/test"), ".")[0]["outcomes"]
 
-    def test_runs_on_every_interpreter_that_targets_the_reference_version(self):
-        executables = {"cpython": "cpython", "pypy": "pypy", "graalpy": "graalpy", "rustpython": "rustpython"}
+    def test_runs_on_every_measured_interpreter_but_the_free_threaded_build(self):
+        executables = {"cpython": "cpython", "pypy": "pypy", "graalpy": "graalpy", "rustpython": "rustpython",
+                       "freethreaded": "freethreaded"}
         answers = {name: reply("passed") for name in executables}
         outcomes = self.run_upstream(answers, executables)
-        self.assertEqual(set(outcomes), {"cpython", "pypy", "graalpy"})
+        self.assertEqual(set(outcomes), {"cpython", "pypy", "graalpy", "rustpython"})
 
     def test_a_failing_reference_makes_the_other_results_unverified(self):
         executables = {"cpython": "cpython", "pypy": "pypy", "graalpy": "graalpy"}

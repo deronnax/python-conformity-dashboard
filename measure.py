@@ -29,11 +29,12 @@ from references import DEFAULT, REFERENCES
 ROOT = Path(__file__).resolve().parent
 RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "rustpython": "RustPython",
                  "freethreaded": "CPython 3.14t"}
-# Measured for speed and thread scaling only: RustPython has no C API, so it cannot
-# run extension modules and the conformity suites would mostly measure that.
-PERFORMANCE_ONLY = {"rustpython"}
-# Interpreters that run the CPython tests: the ones targeting the same Python version.
-UPSTREAM_RUNTIMES = ("cpython", "pypy", "graalpy")
+# Left out of the package ranking for now: RustPython has no C API, so packages
+# with extension modules cannot load on it.
+NO_PACKAGES = {"rustpython"}
+# Interpreters that run the CPython tests. RustPython implements another Python
+# version; its column says so.
+UPSTREAM_RUNTIMES = ("cpython", "pypy", "graalpy", "rustpython")
 # sys.implementation.name reported by each runtime id.
 IMPLEMENTATIONS = {"freethreaded": "cpython"}
 
@@ -326,7 +327,7 @@ def main():
     parser.add_argument("--cpython", default=sys.executable, help="Reference CPython binary of that version")
     parser.add_argument("--pypy", help="PyPy binary implementing that version")
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
-    parser.add_argument("--rustpython", help="RustPython binary. Measured for performance and threads only.")
+    parser.add_argument("--rustpython", help="RustPython binary. Measured everywhere except the package ranking.")
     parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
     parser.add_argument("--history", type=Path, action="append", default=[],
                         help="history.json from an earlier run, extended by this one. Repeatable: only "
@@ -356,17 +357,17 @@ def main():
                 next(item for item in runtimes if item["id"] == runtime)["threads"] = threads
             benchmarks = benchmark_results(executables, directory) if args.benchmarks else []
             tests = extract_tests(args.source, directory, reference)
-            conformity = {runtime: path for runtime, path in executables.items() if runtime not in PERFORMANCE_ONLY}
+            packaged = {runtime: path for runtime, path in executables.items() if runtime not in NO_PACKAGES}
             report = {
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
                 "reference": reference.cpython,
                 "runtimes": runtimes,
-                "common": comparisons(conformity, directory, tests.parent, reference),
-                "upstream": upstream_results(conformity, tests, directory, reference),
+                "common": comparisons(executables, directory, tests.parent, reference),
+                "upstream": upstream_results(executables, tests, directory, reference),
                 "benchmarks": benchmarks,
-                "applications": application_results(conformity, directory, invoke, reference.numpy) if args.applications else [],
-                "packages": package_results(conformity, directory, reference.ranking) if args.packages else None,
+                "applications": application_results(executables, directory, invoke, reference.numpy) if args.applications else [],
+                "packages": package_results(packaged, directory, reference.ranking) if args.packages else None,
             }
             previous = [entry for path in args.history for entry in load_history(path)
                         if not language_mismatch(entry.get("reference", ""), reference.cpython)]
