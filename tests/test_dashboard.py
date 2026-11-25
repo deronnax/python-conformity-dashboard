@@ -102,21 +102,27 @@ class GenerateTests(unittest.TestCase):
         self.assertIn(TRANSLATIONS["en"]["applicationsEmpty"], pages["en"])
         self.assertIn(TRANSLATIONS["fr"]["packagesEmpty"], pages["fr"])
 
-    def test_a_performance_only_runtime_is_absent_from_conformity_views(self):
+    def test_rustpython_is_left_out_of_the_package_view_only(self):
         data = report()
         data["runtimes"].append({"id": "rustpython", "name": "RustPython", "version": "3.14.0 (RustPython 0.6.0)",
+                                 "language": "3.14.0a0", "implementationVersion": "0.6.0a0",
                                  "threads": {"workers": 4, "cores": 4, "sequential": 1.0, "parallel": 0.6,
                                              "speedup": 1.69, "gil": False}})
+        for suite in ("common", "upstream", "applications"):
+            for row in data[suite]:
+                row["outcomes"]["rustpython"] = passed()
         data["benchmarks"] = [benchmark_row(cpython=1.0, pypy=0.2, rustpython=3.3)]
         pages, _ = render(data)
         for language in ("en", "fr"):
             page = pages[language]
-            for view in ("shared-cases", "applications", "pypi-packages"):
+            note = TRANSLATIONS[language]["performanceOnly"]
+            for view in ("shared-cases", "cpython-tests", "applications", "performance", "interpreters"):
                 panel = page.split(f'<section id="{view}"')[1].split("</section>")[0]
-                self.assertNotIn("RustPython", panel.split("<table", 1)[1])
-                self.assertIn(TRANSLATIONS[language]["performanceOnly"], panel)
-            performance = page.split('<section id="performance"')[1].split("</section>")[0]
-            self.assertIn("RustPython", performance)
+                self.assertIn("RustPython", panel)
+                self.assertNotIn(note, panel)
+            packages = page.split('<section id="pypi-packages"')[1].split("</section>")[0]
+            self.assertNotIn("RustPython", packages.split("<table", 1)[1])
+            self.assertIn(note, packages)
 
     def test_accepts_package_reports_without_wheel_tags(self):
         data = report()

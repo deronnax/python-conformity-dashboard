@@ -101,7 +101,7 @@ jobs:
         run: |
           set -euo pipefail
           rustup toolchain install 1.99.0 --profile minimal
-          cargo +1.99.0 build --release --locked --features freeze-stdlib --bin rustpython
+          cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
 
       - name: Measure and generate the dashboard
         shell: bash
