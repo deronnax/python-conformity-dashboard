@@ -93,6 +93,45 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .methodology { margin-top: 1.15rem; padding: .9rem 1rem; background: #e5eeee; border-radius: .6rem; }
 .methodology summary { font-weight: 650; }
 .methodology p { margin-top: .55rem; max-width: 75ch; }
+/* Categorical slots 1 to 5 of the reference palette, validated for adjacent
+   pairs. A runtime keeps its color whatever the other series are. */
+:root {
+  --series-cpython: #257de0;
+  --series-pypy: #f47230;
+  --series-graalpy: #00b894;
+  --series-rustpython: #f2a600;
+  --series-freethreaded: #ee7fac;
+}
+.series-cpython { --series: var(--series-cpython); }
+.series-pypy { --series: var(--series-pypy); }
+.series-graalpy { --series: var(--series-graalpy); }
+.series-rustpython { --series: var(--series-rustpython); }
+.series-freethreaded { --series: var(--series-freethreaded); }
+.runtime-key, .key { display: inline-block; inline-size: .75rem; block-size: .75rem; border-radius: 50%; background: var(--series, #6a4ce2); margin-inline-end: .5rem; }
+.legend .key { inline-size: 1.1rem; block-size: 3px; border-radius: 2px; vertical-align: middle; }
+.interpreter-table th[scope="row"] { white-space: nowrap; font-weight: 650; }
+.speedup-cell { min-inline-size: 14rem; }
+.speedup { display: block; margin-top: .3rem; font-variant-numeric: tabular-nums; }
+.charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: 1.25rem; margin-top: 1rem; }
+.chart { position: relative; margin: 0; padding: .9rem 1rem; border: 1px solid var(--line); border-radius: .65rem; }
+.chart figcaption { font-weight: 650; }
+.legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin: .4rem 0 .2rem; padding: 0; list-style: none; font-size: .85rem; color: var(--muted); }
+.chart svg { display: block; inline-size: 100%; block-size: auto; overflow: visible; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .axis { fill: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+.chart .line { fill: none; stroke: var(--series, #6a4ce2); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .marker { fill: var(--series, #6a4ce2); stroke: var(--paper); stroke-width: 2; }
+.chart .crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
+.chart .hit { fill: transparent; }
+.chart .hit:focus-visible { outline: none; fill: rgba(20, 91, 85, .08); }
+.tooltip { position: absolute; z-index: 3; min-inline-size: 9rem; padding: .5rem .65rem; background: var(--paper); border: 1px solid #a8bac4; border-radius: .4rem; box-shadow: 0 2px 8px rgba(23, 40, 58, .15); font-size: .85rem; pointer-events: none; }
+.tooltip p { color: var(--muted); }
+.tooltip div { display: flex; align-items: center; gap: .5rem; margin-top: .2rem; }
+.tooltip strong { font-variant-numeric: tabular-nums; margin-inline-start: auto; padding-inline-start: .75rem; }
+.tooltip .line-key { inline-size: .9rem; block-size: 2px; background: var(--series, #6a4ce2); }
+.chart-table { margin-top: .5rem; font-size: .85rem; }
+.chart-table table { margin-top: .4rem; }
+
 @media (max-width: 42rem) {
   table { font-size: .84rem; }
   .package-table .column-rank, .package-table .column-downloads { display: none; }

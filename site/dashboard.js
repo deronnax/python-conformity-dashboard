@@ -110,4 +110,60 @@ function initializeDashboard() {
   filterRows();
 }
 
+function initializeCharts() {
+  for (const chart of document.querySelectorAll("[data-chart]")) {
+    const tooltip = chart.querySelector(".tooltip");
+    const crosshair = chart.querySelector(".crosshair");
+    const svg = chart.querySelector("svg");
+
+    function hide() {
+      tooltip.hidden = true;
+      crosshair.hidden = true;
+    }
+
+    function show(band) {
+      let rows = [];
+      try {
+        rows = JSON.parse(band.dataset.readout);
+      } catch {
+        return;
+      }
+      tooltip.replaceChildren();
+      const heading = document.createElement("p");
+      heading.textContent = band.dataset.date;
+      tooltip.append(heading);
+      for (const [name, value, token] of rows) {
+        const row = document.createElement("div");
+        const key = document.createElement("span");
+        key.className = `line-key series-${token}`;
+        const label = document.createElement("span");
+        label.textContent = name;
+        const number = document.createElement("strong");
+        number.textContent = value;
+        row.append(key, label, number);
+        tooltip.append(row);
+      }
+      crosshair.setAttribute("x1", band.dataset.x);
+      crosshair.setAttribute("x2", band.dataset.x);
+      crosshair.hidden = false;
+      tooltip.hidden = false;
+      const frame = chart.getBoundingClientRect();
+      const box = band.getBoundingClientRect();
+      const centre = box.left + box.width / 2 - frame.left;
+      const room = frame.width - tooltip.offsetWidth - 8;
+      const side = centre > frame.width / 2 ? centre - tooltip.offsetWidth - 12 : centre + 12;
+      tooltip.style.left = `${Math.max(8, Math.min(side, room))}px`;
+      tooltip.style.top = `${svg.getBoundingClientRect().top - frame.top + 8}px`;
+    }
+
+    for (const band of chart.querySelectorAll("[data-readout]")) {
+      band.addEventListener("pointerenter", () => show(band));
+      band.addEventListener("focus", () => show(band));
+      band.addEventListener("pointerleave", hide);
+      band.addEventListener("blur", hide);
+    }
+  }
+}
+
 initializeDashboard();
+initializeCharts();
