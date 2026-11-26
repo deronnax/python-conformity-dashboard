@@ -1,5 +1,7 @@
+import subprocess
 import unittest
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 
 import package_bench
@@ -100,16 +102,85 @@ class MissingWheelTests(unittest.TestCase):
 
 
 class SourceFallbackTests(unittest.TestCase):
-    def test_only_the_projects_own_missing_wheel_triggers_the_fallback(self):
-        line = "ERROR: No matching distribution found for markupsafe==3.0.4"
-        self.assertTrue(package_bench.sdist_fallback({"project": "MarkupSafe"}, line))
-        self.assertFalse(package_bench.sdist_fallback({"project": "jinja2"}, line))
-
-    def test_only_the_tested_project_may_build_from_source(self):
-        arguments = package_bench.install_arguments(Path("/tmp/prefix"), "pypy", "markupsafe")
-        self.assertEqual(arguments[arguments.index("--no-binary") + 1], "markupsafe")
+    def test_distributions_without_a_wheel_may_build_from_source(self):
+        arguments = package_bench.install_arguments(Path("/tmp/prefix"), "pypy", ("jinja2", "MarkupSafe"))
+        self.assertEqual(arguments[arguments.index("--no-binary") + 1], "jinja2,MarkupSafe")
         self.assertIn("--only-binary=:all:", arguments)
         self.assertNotIn("--no-binary", package_bench.install_arguments(Path("/tmp/prefix"), "pypy"))
+
+    def failure(self, stderr):
+        installation = subprocess.CompletedProcess([], 1, stdout="", stderr=stderr)
+        return package_bench.install_failure({"project": "jinja2", "version": "3.1.6"}, installation, None, Path("/tmp"))
+
+    def test_names_a_dependency_without_any_wheel(self):
+        blocker = {"name": "MarkupSafe", "requirement": "MarkupSafe>=2.0", "cause": "noWheel"}
+        with mock.patch.object(package_bench, "describe_dependency", return_value=blocker):
+            outcome, missing = self.failure(
+                "ERROR: No matching distribution found for MarkupSafe>=2.0 (from jinja2)")
+        self.assertEqual((outcome["status"], missing), ("dependency", "MarkupSafe"))
+
+    def test_a_dependency_built_for_another_abi_is_not_retried(self):
+        blocker = {"name": "rpds-py", "requirement": "rpds-py>=0.7.0", "cause": "otherAbi"}
+        with mock.patch.object(package_bench, "describe_dependency", return_value=blocker):
+            _, missing = self.failure("ERROR: No matching distribution found for rpds-py>=0.7.0 (from jinja2)")
+        self.assertIsNone(missing)
+
+    def test_names_the_project_without_any_wheel(self):
+        with mock.patch.object(package_bench, "release_files", return_value=["jinja2-3.1.6.tar.gz"]):
+            outcome, missing = package_bench.install_failure(
+                {"project": "jinja2", "version": "3.1.6"},
+                subprocess.CompletedProcess([], 1, stdout="", stderr="ERROR: No matching distribution found for jinja2==3.1.6"),
+                {"interpreter": "pp312", "abi": "pypy312_pp80", "platform": "manylinux_2_39_x86_64"}, Path("/tmp"))
+        self.assertEqual((outcome["status"], missing), ("noWheel", "jinja2"))
+
+    def test_only_distributions_built_from_source_count_as_compiled(self):
+        with TemporaryDirectory() as directory:
+            site = Path(directory, "lib", "site-packages")
+            for name, files in (("MarkupSafe-3.0.4", "markupsafe/__init__.py"), ("cffi-2.1.1", "_cffi_backend.so")):
+                Path(site, name + ".dist-info").mkdir(parents=True)
+                Path(site, name + ".dist-info", "RECORD").write_text(f"{files},sha256=x,1\n", encoding="utf-8")
+            self.assertEqual(package_bench.compiled_files(Path(directory), ("markupsafe",)), [])
+            self.assertEqual(package_bench.compiled_files(Path(directory), ("cffi",)), ["_cffi_backend.so"])
+
+    def test_a_dependency_without_a_wheel_builds_from_its_sdist(self):
+        """jinja2 on PyPy: MarkupSafe publishes no PyPy wheel, and its sdist is pure Python."""
+        calls = []
+
+        def launch(executable, cwd, *arguments, timeout, extra_environment=None):
+            if "-c" in arguments and arguments[1] == package_bench.START_PIP:
+                calls.append(extra_environment)
+                if len(calls) == 1:
+                    return subprocess.CompletedProcess([], 1, stdout="",
+                        stderr="ERROR: No matching distribution found for MarkupSafe>=2.0 (from jinja2)")
+                Path(cwd, "prefix", "lib", "site-packages").mkdir(parents=True)
+                return subprocess.CompletedProcess([], 0, stdout="", stderr="")
+            return subprocess.CompletedProcess([], 0, stdout='{"status": "passed", "detail": "", "level": "import"}', stderr="")
+
+        blocker = {"name": "MarkupSafe", "requirement": "MarkupSafe>=2.0", "cause": "noWheel"}
+        with TemporaryDirectory() as root, mock.patch.object(package_bench, "launch", launch), \
+                mock.patch.object(package_bench, "describe_dependency", return_value=blocker):
+            outcome = package_bench.install_and_import(
+                {"project": "jinja2", "version": "3.1.6", "module": "jinja2"}, "pypy", "pypy3", Path(root), Path(root), None)
+        self.assertEqual(outcome["status"], "passed")
+        self.assertIn("no wheel for this interpreter: MarkupSafe", outcome["detail"])
+        self.assertEqual(calls, [None, package_bench.NO_COMPILER])
+
+    def test_a_dependency_that_needs_a_compiler_stays_the_blocker(self):
+        def launch(executable, cwd, *arguments, timeout, extra_environment=None):
+            if extra_environment:
+                return subprocess.CompletedProcess([], 1, stdout="", stderr="ERROR: Failed building wheel for rpds-py")
+            return subprocess.CompletedProcess([], 1, stdout="",
+                stderr="ERROR: No matching distribution found for rpds-py>=0.7.0 (from referencing)")
+
+        blocker = {"name": "rpds-py", "requirement": "rpds-py>=0.7.0", "cause": "noWheel"}
+        with TemporaryDirectory() as root, mock.patch.object(package_bench, "launch", launch), \
+                mock.patch.object(package_bench, "describe_dependency", return_value=blocker):
+            outcome = package_bench.install_and_import(
+                {"project": "referencing", "version": "0.37.0", "module": "referencing"}, "graalpy", "graalpy",
+                Path(root), Path(root), None)
+        self.assertEqual(outcome["status"], "dependency")
+        self.assertEqual(outcome["blocker"]["name"], "rpds-py")
+        self.assertIn("does not build without a compiler", outcome["detail"])
 
 
 RESOLUTION = """\
@@ -192,6 +263,22 @@ class FunctionalCheckTests(unittest.TestCase):
             completed = subprocess.run([sys.executable, "-I", "-c", package_bench.IMPORT_PACKAGE, site, "demo", "1.0",
                                         "demo", check], capture_output=True, text=True, timeout=60)
         return json.loads(completed.stdout.splitlines()[-1])
+
+    def test_a_module_shipped_by_the_interpreter_passes(self):
+        """PyPy ships cffi: there, the PyPI release installs only its metadata."""
+        import json
+        import subprocess
+        import sys
+        with TemporaryDirectory() as site:
+            Path(site, "demo-1.0.dist-info").mkdir()
+            Path(site, "demo-1.0.dist-info", "METADATA").write_text(
+                "Metadata-Version: 2.1\nName: demo\nVersion: 1.0\n", encoding="utf-8")
+            Path(site, "demo-1.0.dist-info", "RECORD").write_text("demo-1.0.dist-info/METADATA,,\n", encoding="utf-8")
+            completed = subprocess.run([sys.executable, "-I", "-c", package_bench.IMPORT_PACKAGE, site, "demo", "1.0",
+                                        "json", ""], capture_output=True, text=True, timeout=60)
+        outcome = json.loads(completed.stdout.splitlines()[-1])
+        self.assertEqual(outcome["status"], "passed")
+        self.assertIn("ships its own json", outcome["detail"])
 
     def test_a_package_without_a_check_is_import_only(self):
         self.assertEqual(self.run_check(""), {"status": "passed", "detail": "", "level": "import"})
