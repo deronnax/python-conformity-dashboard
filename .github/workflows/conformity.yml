@@ -52,7 +52,17 @@ jobs:
             pypy-sha256: aeed27797777296d9c94e53bdfa608804696dbd4ff9f2213003cce064ee46ef8
             graalpy: https://github.com/oracle/graalpython/releases/download/graal-25.2.4/graalpy3.12-community-25.2.4-linux-amd64.tar.gz
             graalpy-sha256: 98af303a6b714bde39077354733254f78023ddef06d61e14cb66a3a01f10ae82
-            freethreaded: false
+          # PyPy has no release for Python 3.13 or 3.14, nor GraalPy for 3.14.
+          - python: "3.13"
+            folder: 3.13/
+            cpython: 3.13.17
+            cpython-sha256: cbda6f7767884fc456860b11fd184391a9320cae00a86c0f49a1c7ac6e236f7a
+            graalpy: https://github.com/oracle/graalpython/releases/download/graal-25.6.5/graalpy3.13-community-25.6.5-linux-amd64.tar.gz
+            graalpy-sha256: 9c9d68730d4e6de5f5e96acddab6f0625b6534026a128ee72a1d5cfe59621520
+          - python: "3.14"
+            folder: 3.14/
+            cpython: 3.14.9
+            cpython-sha256: dfa4c5a40c47f338f41658017be550c72247c391e6bfb1fa4da03ebc8451abdf
     env:
       PYTHON: runtimes/cpython/bin/python${{ matrix.python }}
       # The published dashboard of this version.
@@ -62,7 +72,8 @@ jobs:
         with:
           persist-credentials: false
 
-      # Regenerating the pages needs only CPython.
+      # Regenerating the pages needs only CPython. A measurement also needs the
+      # interpreters this version lists.
       - name: Download the interpreters
         run: |
           fetch() {  # sha256, url, folder
@@ -72,12 +83,12 @@ jobs:
           }
           fetch ${{ matrix.cpython-sha256 }} https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${{ matrix.cpython }}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz cpython
           if $MEASURE; then
-            fetch ${{ matrix.pypy-sha256 }} ${{ matrix.pypy }} pypy
-            fetch ${{ matrix.graalpy-sha256 }} ${{ matrix.graalpy }} graalpy
             fetch bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython
-          fi
-          if $MEASURE && ${{ matrix.freethreaded }}; then
-            fetch 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
+            if [ "${{ matrix.pypy }}" ]; then fetch ${{ matrix.pypy-sha256 }} ${{ matrix.pypy }} pypy; fi
+            if [ "${{ matrix.graalpy }}" ]; then fetch ${{ matrix.graalpy-sha256 }} ${{ matrix.graalpy }} graalpy; fi
+            if [ "${{ matrix.freethreaded }}" ]; then
+              fetch 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
+            fi
           fi
 
       - name: Run the unit tests
@@ -96,17 +107,17 @@ jobs:
         if: env.MEASURE == 'true'
         run: |
           curl -fsSL "${PUBLISHED}history.json" -o history.json || echo "No published history yet."
-          $PYTHON -B measure.py --reference ${{ matrix.python }} --history history.json \
-            --pypy runtimes/pypy/bin/pypy${{ matrix.python }} \
-            --graalpy runtimes/graalpy/bin/graalpy \
-            --rustpython runtimes/rustpython/target/release/rustpython \
-            ${{ matrix.freethreaded && '--freethreaded runtimes/freethreaded/bin/python3.14t' || '' }} \
+          interpreters=(--rustpython runtimes/rustpython/target/release/rustpython)
+          if [ -d runtimes/pypy ]; then interpreters+=(--pypy runtimes/pypy/bin/pypy${{ matrix.python }}); fi
+          if [ -d runtimes/graalpy ]; then interpreters+=(--graalpy runtimes/graalpy/bin/graalpy); fi
+          if [ -d runtimes/freethreaded ]; then interpreters+=(--freethreaded runtimes/freethreaded/bin/python3.14t); fi
+          $PYTHON -B measure.py --reference ${{ matrix.python }} --history history.json "${interpreters[@]}" \
             --benchmarks --applications --packages | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Regenerate the pages from the published results
         if: env.MEASURE == 'false'
         run: |
-          curl -fsSL "${PUBLISHED}results.json" -o results.json
+          curl -fsSL "${PUBLISHED}results.json" -o results.json || { echo "Not published yet."; exit 0; }
           curl -fsSL "${PUBLISHED}history.json" -o history.json
           $PYTHON -B dashboard.py results.json --history history.json --version ${{ matrix.python }}
 
@@ -121,12 +132,14 @@ jobs:
     steps:
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          name: dashboard-3.11
-          path: site/
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: dashboard-3.12
-          path: site/3.12/
+          pattern: dashboard-*
+          path: parts/
+
+      # The default version is the site root, the others are served from a folder.
+      - name: Put each version in its folder
+        run: |
+          mv parts/dashboard-3.11 site
+          for part in parts/dashboard-*; do mv "$part" "site/${part#parts/dashboard-}"; done
 
       # Python 3.11 used to be served under /3.11/, with a French page under fr/.
       - name: Redirect the former addresses
