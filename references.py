@@ -85,6 +85,25 @@ REFERENCES = {
         ),
         "freethreaded": FREETHREADED_NUMPY,
     }, notes=("pypyBeta",)),
+    # PyPy has no release for Python 3.13. Oracle's GraalPy wheels of NumPy 2.4.4 are
+    # built for GraalPy 25.3, not for GraalPy 25.6.
+    "3.13": Reference("3.13.17", "6020bd10aff3bf4821be16f088ebb1591beb7b811dcd8fab1da8f7c22a7b27e7", {
+        "cpython": Wheel(
+            PYPI + "d1/73/a9d864e42a01896bb5974475438f16086be9ba1f0d19d0bb7a07427c4a8b/"
+            "numpy-2.4.4-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+            "c901b15172510173f5cb310eae652908340f8dede90fff9e3bf6c0d8dfd92f83",
+        ),
+        "freethreaded": FREETHREADED_NUMPY,
+    }, notes=("noPypy313",)),
+    # Neither PyPy nor GraalPy has a release for Python 3.14.
+    "3.14": Reference("3.14.9", "e02d9ac21cebda6e46435369744a92c65cc7cd8669697694122cf97ffacd1e53", {
+        "cpython": Wheel(
+            PYPI + "98/7c/21252050676612625449b4807d6b695b9ce8a7c9e1c197ee6216c8a65c7c/"
+            "numpy-2.4.4-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+            "27a8d92cd10f1382a67d7cf4db7ce18341b66438bdd9f691d7b0e48d104c2a9d",
+        ),
+        "freethreaded": FREETHREADED_NUMPY,
+    }, notes=("noPypy314",)),
 }
 # PyPy for Python 3.12 is a beta, so the dashboard opens on Python 3.11.
 DEFAULT = "3.11"

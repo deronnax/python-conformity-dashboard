@@ -98,7 +98,7 @@ class ReferenceTests(unittest.TestCase):
     def test_the_default_version_is_at_the_root(self):
         layout = measure.site_layout(REFERENCES["3.12"])
         self.assertEqual(layout["current"], "3.12")
-        self.assertEqual(dict(layout["versions"]), {"3.12": "3.12/", "3.11": ""})
+        self.assertEqual(layout["versions"], [("3.11", ""), ("3.12", "3.12/"), ("3.13", "3.13/"), ("3.14", "3.14/")])
         self.assertEqual(DEFAULT, "3.11")
 
     def test_the_free_threaded_build_is_left_out_of_the_packages(self):
@@ -108,6 +108,12 @@ class ReferenceTests(unittest.TestCase):
     def test_the_beta_pypy_is_flagged(self):
         self.assertEqual(REFERENCES["3.12"].notes, ("pypyBeta",))
         self.assertEqual(REFERENCES["3.11"].notes, ())
+        self.assertEqual(REFERENCES["3.13"].notes, ("noPypy313",))
+        self.assertEqual(REFERENCES["3.14"].notes, ("noPypy314",))
+
+    def test_every_version_has_a_ranking(self):
+        for reference in REFERENCES.values():
+            self.assertTrue(reference.ranking.is_file(), reference.minor)
 
 
 if __name__ == "__main__":
