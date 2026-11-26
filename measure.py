@@ -121,11 +121,8 @@ def extract_tests(archive, directory, reference):
     return directory / test_path
 
 
-def result(status, detail="", *, detail_fr=None):
-    outcome = {"status": status, "detail": detail}
-    if detail_fr is not None:
-        outcome["detailFr"] = detail_fr
-    return outcome
+def result(status, detail=""):
+    return {"status": status, "detail": detail}
 
 
 # Text that only appears when the interpreter itself fails, below the Python level.
@@ -141,8 +138,7 @@ def invoke(executable, *args, cwd, timeout=30):
     try:
         completed = run(executable, *args, cwd=cwd, timeout=timeout)
     except subprocess.TimeoutExpired:
-        return result("timeout", f"The process exceeded {timeout} seconds.",
-                      detail_fr=f"Le processus a dépassé {timeout} secondes.")
+        return result("timeout", f"The process exceeded {timeout} seconds.")
     except OSError as exc:
         return result("blocked", str(exc))
     if completed.returncode:
@@ -157,7 +153,7 @@ def invoke(executable, *args, cwd, timeout=30):
             status = "blocked"
         if detail:
             return result(status, detail)
-        return result(status, f"Exit code {completed.returncode}", detail_fr=f"Code de sortie {completed.returncode}")
+        return result(status, f"Exit code {completed.returncode}")
     return completed.stdout.strip()
 
 
@@ -212,13 +208,7 @@ else:
             return f"{value_type}: {ast.literal_eval(value)!r}"
         except (ValueError, SyntaxError):
             pass
-    return result("blocked", f"Unreadable process output: {output}", detail_fr=f"Sortie illisible du processus : {output}")
-
-
-def french_observation(observation):
-    if observation.startswith("unexpected exception: "):
-        return observation.replace("unexpected exception: ", "exception inattendue : ", 1)
-    return observation
+    return result("blocked", f"Unreadable process output: {output}")
 
 
 def comparisons(executables, cwd, lib=None, reference=REFERENCES[DEFAULT]):
@@ -232,17 +222,14 @@ def comparisons(executables, cwd, lib=None, reference=REFERENCES[DEFAULT]):
                 outcome = observation
             elif baseline != probe.expected:
                 status = "blocked" if runtime == "cpython" else "unverified"
-                outcome = result(status, f"Expected by the corpus: {probe.expected}\nObserved: {observation}",
-                                 detail_fr=f"Attendu dans le corpus : {probe.expected}\nObservé : {french_observation(observation)}")
+                outcome = result(status, f"Expected by the corpus: {probe.expected}\nObserved: {observation}")
             else:
-                translated = french_observation(observation)
-                outcome = result("passed" if observation == baseline else "different", observation,
-                                 detail_fr=translated if translated != observation else None)
+                outcome = result("passed" if observation == baseline else "different", observation)
             outcomes[runtime] = outcome
         snippet = "\n".join(part for part in (dedent(probe.setup).strip(), probe.expression) if part)
         snippet = snippet.replace("api(", probe.api + "(").replace("module.", probe.module + ".")
         rows.append({"id": probe.id, "module": probe.module, "api": probe.api, "title": probe.title,
-                     "titleFr": probe.title_fr, "contract": probe.contract, "contractSource": probe.contract_source(reference),
+                     "contract": probe.contract, "contractSource": probe.contract_source(reference),
                      "code": f"import {probe.module}\n\n{snippet}", "source": source_url(probe.upstream, lib, reference),
                      "sourceTest": probe.upstream, "outcomes": outcomes})
     return rows
@@ -263,7 +250,7 @@ def thread_results(executables, cwd):
 def benchmark_results(executables, cwd):
     """Time each benchmark in its own process and check its answer against CPython's."""
     rows = []
-    for name, (_, title, title_fr) in BENCHMARKS.items():
+    for name, (_, title) in BENCHMARKS.items():
         measured = {}
         for runtime, executable in executables.items():
             observation = invoke(executable, str(ROOT / "benchmarks.py"), name, cwd=cwd, timeout=240)
@@ -277,15 +264,13 @@ def benchmark_results(executables, cwd):
             if "samples" not in observed:
                 outcomes[runtime] = observed
             elif expected is None:
-                outcomes[runtime] = result("unverified", f"The CPython reference did not finish.\nObserved: {observed['result']}",
-                                           detail_fr=f"La référence CPython n’a pas terminé.\nObservé : {observed['result']}")
+                outcomes[runtime] = result("unverified", f"The CPython reference did not finish.\nObserved: {observed['result']}")
             elif observed["result"] != expected:
-                outcomes[runtime] = result("different", f"Expected: {expected}\nObserved: {observed['result']}",
-                                           detail_fr=f"Attendu : {expected}\nObservé : {observed['result']}")
+                outcomes[runtime] = result("different", f"Expected: {expected}\nObserved: {observed['result']}")
             else:
                 outcomes[runtime] = {"status": "passed", "detail": "", "first": observed["first"],
                                      **summarize(observed["samples"])}
-        rows.append({"id": name, "title": title, "titleFr": title_fr, "outcomes": outcomes})
+        rows.append({"id": name, "title": title, "outcomes": outcomes})
     return rows
 
 
@@ -306,8 +291,7 @@ def upstream_results(executables, tests, cwd, reference=REFERENCES[DEFAULT]):
             if outcomes["cpython"]["status"] != "passed":
                 for runtime in runtimes[1:]:
                     observed = outcomes[runtime]
-                    outcomes[runtime] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}",
-                                               detail_fr=f"État observé : {observed['status']}\n{observed.get('detailFr', observed['detail'])}")
+                    outcomes[runtime] = result("unverified", f"Observed status: {observed['status']}\n{observed['detail']}")
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
                          "source": source_url(method, tests.parent, reference), "sourceTest": method, "outcomes": outcomes})
     return rows

@@ -1,14 +1,12 @@
 <!doctype html>
-<html lang="$lang">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="$subtitle">
   <title>$title</title>
-  <link rel="alternate" hreflang="en" href="${base}index.html">
-  <link rel="alternate" hreflang="fr" href="$frenchPage">
-  <link rel="stylesheet" href="${base}styles.css?v=$styleVersion">
-  <script src="${base}dashboard.js?v=$scriptVersion" defer></script>
+  <link rel="stylesheet" href="styles.css?v=$styleVersion">
+  <script src="dashboard.js?v=$scriptVersion" defer></script>
 </head>
 <body>
   <main>
@@ -18,13 +16,6 @@
         <p>$subtitle</p>
       </div>
       <div class="header-actions">
-        <details class="language-control">
-          <summary>$language</summary>
-          <ul>
-            <li><a lang="en" hreflang="en" href="${base}index.html?lang=en" data-language-link$englishCurrent>English</a></li>
-            <li><a lang="fr" hreflang="fr" href="$frenchPage?lang=fr" data-language-link$frenchCurrent>Français</a></li>
-          </ul>
-        </details>
         <a class="github-link" href="https://github.com/deronnax/python-conformity-dashboard" aria-label="$github" title="$github">
           <!-- GitHub mark from Primer Octicons. See LICENSE. -->
           <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" aria-hidden="true" focusable="false">
@@ -35,7 +26,7 @@
     </header>
     <div class="metadata">
       <p>$reference $referenceVersion · $platform · <time datetime="$generatedAt">$timestamp</time></p>
-      <a href="${base}results.json" download>$download</a>
+      <a href="results.json" download>$download</a>
     </div>
 
     <section class="comparison" aria-label="$comparison">

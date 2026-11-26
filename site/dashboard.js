@@ -1,43 +1,8 @@
-const preferenceKey = "python-conformity-language";
-const supportedLanguages = ["en", "fr"];
-
-function preferredLanguage(pageLanguage, explicit) {
-  if (supportedLanguages.includes(explicit)) return explicit;
-  if (pageLanguage === "fr") return pageLanguage;
-  try {
-    const saved = localStorage.getItem(preferenceKey);
-    if (supportedLanguages.includes(saved)) return saved;
-  } catch {
-    // Storage can be unavailable when viewing the archive directly.
-  }
-  const locales = navigator.languages?.length ? navigator.languages : [navigator.language];
-  const available = locales.map((locale) => locale?.split("-")[0].toLowerCase());
-  return available.find((locale) => supportedLanguages.includes(locale)) ?? "en";
-}
-
 function initializeDashboard() {
-  const pageLanguage = document.documentElement.lang;
   const parameters = new URLSearchParams(location.search);
-  const explicit = parameters.get("lang");
-  const language = preferredLanguage(pageLanguage, explicit);
-  const languageLinks = [...document.querySelectorAll("[data-language-link]")];
-  if (language !== pageLanguage) {
-    const target = new URL(languageLinks.find((link) => link.hreflang === language).href);
-    target.search = location.search;
-    target.hash = location.hash;
-    location.replace(target);
-    return;
-  }
-  if (explicit === pageLanguage) {
-    try {
-      localStorage.setItem(preferenceKey, pageLanguage);
-    } catch {
-      // The language remains explicit in the URL.
-    }
-  }
 
   const stamp = document.querySelector("time[datetime]");
-  const date = new Intl.DateTimeFormat(pageLanguage, { dateStyle: "medium", timeStyle: "short" });
+  const date = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeStyle: "short" });
   stamp.textContent = date.format(new Date(stamp.dateTime));
 
   let moduleName = parameters.get("module") ?? "";
@@ -146,8 +111,8 @@ function initializeDashboard() {
     }
   });
 
-  // Switching language or Python version keeps the view and the filters.
-  for (const link of [...languageLinks, ...document.querySelectorAll("[data-version-link]")]) {
+  // Switching Python version keeps the view and the filters.
+  for (const link of document.querySelectorAll("[data-version-link]")) {
     link.addEventListener("click", (event) => {
       if (event.button || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
       event.preventDefault();

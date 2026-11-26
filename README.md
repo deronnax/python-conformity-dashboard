@@ -18,9 +18,9 @@ open dist/index.html  # macOS
 
 The command downloads the official CPython source archive, checks its SHA-256 and extracts only `Lib/test` into a temporary directory. `--source /path/to/Python-3.12.15.tar.xz` reuses an archive you already have. The page opens straight from the files generated in `dist/`. `dist/results.json` holds the detailed results.
 
-The dashboard is in English by default, and in French when French is the first supported language in the browser preferences. The language menu picks another language and remembers the choice.
+The dashboard is in English. The former French page, `fr/`, redirects to it.
 
-Python renders both pages and all tables with the standard library. The browser handles the language preference and the filters. To regenerate the site from an existing report, run `python3 -B dashboard.py dist/results.json`. The generated pages are `dist/index.html` and `dist/fr/index.html`.
+Python renders the page and all tables with the standard library. The browser handles the filters. To regenerate the site from an existing report, run `python3 -B dashboard.py dist/results.json`. The generated page is `dist/index.html`.
 
 `--applications` downloads pinned distributions of Django 5.2.19, Bottle 0.13.4 and NumPy 2.4.4 into the temporary directory. It checks their digests and extracts them for import, leaving installed environments alone. The NumPy scenario checks the native extension suffix the interpreter expects on Linux x86-64. Only CPython and CPython 3.14t have a pinned NumPy wheel: PyPI has none for PyPy 3.12, and Oracle's GraalPy wheels do not cover GraalPy 25.2 on Python 3.12. The other interpreters report "No wheel". The scenarios cover Django template rendering, an aggregate with a rolled-back SQLite transaction, a Bottle WSGI route and NumPy operations. Their results appear in the Applications tab.
 

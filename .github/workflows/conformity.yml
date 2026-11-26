@@ -167,7 +167,8 @@ jobs:
           name: dashboard-3.12
           path: site/3.12/
 
-      # The 3.11 dashboard used to live under /3.11/. Keep those links working.
+      # The 3.11 dashboard used to live under /3.11/, with a French page under
+      # fr/. Both now redirect to the English page at the root.
       - name: Redirect the former 3.11 address
         shell: bash
         run: |
@@ -175,7 +176,7 @@ jobs:
           for folder in 3.11 3.11/fr; do
             mkdir -p "site/$folder"
             up=$(echo "$folder" | sed 's|[^/]*|..|g')
-            target="$up${folder#3.11}/"
+            target="$up/"
             printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=%s"><link rel="canonical" href="%s"><script>location.replace("%s" + location.search + location.hash)</script><a href="%s">Python 3.11</a>\n' \
               "$target" "$target" "$target" "$target" > "site/$folder/index.html"
           done

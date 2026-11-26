@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from dashboard import describe_observation, generate
-from dashboard_content import TRANSLATIONS
+from dashboard_content import COPY
 from history import load as _load, merge, snapshot
 
 
@@ -55,7 +55,7 @@ def report(**overrides):
         "applications": [{
             "id": "numpy-array", "package": "NumPy", "version": "2.4.4",
             "outcomes": {"cpython": passed(),
-                         "pypy": {"status": "otherAbi", "detail": "loads pp80", "detailFr": "charge pp80"}},
+                         "pypy": {"status": "otherAbi", "detail": "loads pp80"}},
         }],
         "packages": {
             "start": "2026-10-26", "end": "2026-11-25", "source": "https://github.com/ClickHouse/clickpy",
@@ -75,33 +75,37 @@ def render(data, previous=()):
     with TemporaryDirectory() as directory:
         output = Path(directory)
         generate(data, output, previous)
-        pages = {language: (output / path).read_text(encoding="utf-8")
-                 for language, path in (("en", "index.html"), ("fr", "fr/index.html"))}
+        pages = {"en": (output / "index.html").read_text(encoding="utf-8"),
+                 "fr": (output / "fr" / "index.html").read_text(encoding="utf-8")}
         saved = json.loads((output / "results.json").read_text(encoding="utf-8"))
     return pages, saved
 
 
 class GenerateTests(unittest.TestCase):
-    def test_renders_every_view_in_both_languages(self):
+    def test_renders_every_view(self):
         pages, saved = render(report())
         self.assertEqual(saved["reference"], "3.12.15")
-        for language, page in pages.items():
+        for page in (pages["en"],):
             for anchor in ("pypi-packages", "applications", "shared-cases", "cpython-tests", "interpreters", "history"):
                 self.assertIn(f'id="{anchor}"', page)
                 self.assertIn(f'href="#{anchor}"', page)
-            self.assertIn(TRANSLATIONS[language]["statuses"]["otherAbi"], page)
-            self.assertIn(TRANSLATIONS[language]["applicationTitles"]["numpy-array"], page)
+            self.assertIn(COPY["statuses"]["otherAbi"], page)
+            self.assertIn(COPY["applicationTitles"]["numpy-array"], page)
             self.assertIn('<span class="runtime-note">pypy312_pp80</span>', page)
             self.assertNotIn("$", page.replace("$ ", ""), "unsubstituted template field")
         self.assertIn("<pre>Returns None</pre>", pages["en"])
-        self.assertIn("<pre>Lève BufferError</pre>", pages["fr"])
-        self.assertIn("<pre>charge pp80</pre>", pages["fr"])
+        self.assertIn("<pre>loads pp80</pre>", pages["en"])
+        self.assertNotIn("lang=\"fr\"", pages["en"])
+
+    def test_the_former_french_page_redirects_to_english(self):
+        pages, _ = render(report())
+        self.assertIn('location.replace("../" + location.search + location.hash)', pages["fr"])
 
     def test_accepts_reports_without_optional_measurements(self):
         legacy = report(applications=[], packages=None)
         pages, _ = render(legacy)
-        self.assertIn(TRANSLATIONS["en"]["applicationsEmpty"], pages["en"])
-        self.assertIn(TRANSLATIONS["fr"]["packagesEmpty"], pages["fr"])
+        self.assertIn(COPY["applicationsEmpty"], pages["en"])
+        self.assertIn(COPY["packagesEmpty"], pages["en"])
 
     def test_rustpython_appears_in_every_view(self):
         data = report()
@@ -115,14 +119,14 @@ class GenerateTests(unittest.TestCase):
         data["packages"]["items"][0]["outcomes"]["rustpython"] = {"status": "nativeOnly", "detail": ""}
         data["benchmarks"] = [benchmark_row(cpython=1.0, pypy=0.2, rustpython=3.3)]
         pages, _ = render(data)
-        for language in ("en", "fr"):
+        for language in ("en",):
             page = pages[language]
-            note = TRANSLATIONS[language]["performanceOnly"]
+            note = COPY["performanceOnly"]
             for view in ("pypi-packages", "shared-cases", "cpython-tests", "applications", "performance", "interpreters"):
                 panel = page.split(f'<section id="{view}"')[1].split("</section>")[0]
                 self.assertIn("RustPython", panel)
                 self.assertEqual(note in panel, view == "pypi-packages")
-            self.assertIn(TRANSLATIONS[language]["statuses"]["nativeOnly"], page)
+            self.assertIn(COPY["statuses"]["nativeOnly"], page)
 
     def test_accepts_package_reports_without_wheel_tags(self):
         data = report()
@@ -148,8 +152,8 @@ class ContractAndVersionTests(unittest.TestCase):
 
     def test_cases_show_their_contract_and_provenance(self):
         pages, saved = render(self.data())
-        for language in ("en", "fr"):
-            copy = TRANSLATIONS[language]
+        for language in ("en",):
+            copy = COPY
             page = pages[language]
             self.assertIn(copy["contracts"]["cpython_behavior"], page)
             self.assertIn('<a href="https://docs.python.org/3.12/library/json.html#json.loads">', page)
@@ -161,47 +165,45 @@ class ContractAndVersionTests(unittest.TestCase):
 
     def test_cross_version_runtimes_are_labelled(self):
         pages, _ = render(self.data())
-        note = TRANSLATIONS["en"]["crossVersionNote"].format(version="3.14")
+        note = COPY["crossVersionNote"].format(version="3.14")
         self.assertIn(f'<span class="runtime-note">{note}</span>', pages["en"])
-        card = TRANSLATIONS["fr"]["crossVersionCard"].format(version="3.14.9", reference="3.12.15")
-        self.assertIn(card, pages["fr"].replace("&#x27;", "'"))
+        card = COPY["crossVersionCard"].format(version="3.14.9", reference="3.12.15")
+        self.assertIn(card, pages["en"].replace("&#x27;", "'"))
 
     def test_the_interpreters_view_separates_release_and_language(self):
         data = report()
         data["runtimes"][1].update(language="3.12.15", implementationVersion="8.0.1")
         pages, _ = render(data)
         self.assertIn(">8.0.1</td>", pages["en"])
-        self.assertIn(TRANSLATIONS["en"]["implementationVersion"], pages["en"])
+        self.assertIn(COPY["implementationVersion"], pages["en"])
 
     def test_reports_without_version_fields_still_render(self):
         pages, _ = render(report())
         self.assertIn(">8.0.1</td>", pages["en"])
         self.assertNotIn("data-contract-filter", pages["en"])
-        self.assertNotIn(TRANSLATIONS["en"]["performanceOnly"], pages["en"])
+        self.assertNotIn(COPY["performanceOnly"], pages["en"])
 
 
 class VersionSwitchTests(unittest.TestCase):
     def render(self, current):
-        site = {"current": current, "versions": [("3.12", ""), ("3.11", "3.11/")]}
+        site = {"current": current, "versions": [("3.11", ""), ("3.12", "3.12/")]}
         with TemporaryDirectory() as directory:
             generate(report(), Path(directory), (), site=site)
-            return {language: (Path(directory) / path).read_text(encoding="utf-8")
-                    for language, path in (("en", "index.html"), ("fr", "fr/index.html"))}
+            return (Path(directory) / "index.html").read_text(encoding="utf-8")
 
-    def test_links_reach_the_same_language_of_every_version(self):
-        root = self.render("3.12")
-        self.assertIn('href="index.html" data-version-link aria-current="page">Python 3.12', root["en"])
-        self.assertIn('href="3.11/index.html" data-version-link>Python 3.11', root["en"])
-        self.assertIn('href="../3.11/fr/index.html" data-version-link>Python 3.11', root["fr"])
-        nested = self.render("3.11")
-        self.assertIn('href="../index.html" data-version-link>Python 3.12', nested["en"])
-        self.assertIn('href="../../fr/index.html" data-version-link>Python 3.12', nested["fr"])
-        self.assertIn('href="../3.11/index.html" data-version-link aria-current="page">Python 3.11', nested["en"])
+    def test_links_reach_every_version_oldest_first(self):
+        root = self.render("3.11")
+        self.assertIn('href="index.html" data-version-link aria-current="page">Python 3.11', root)
+        self.assertIn('href="3.12/index.html" data-version-link>Python 3.12', root)
+        self.assertLess(root.index(">Python 3.11<"), root.index(">Python 3.12<"))
+        nested = self.render("3.12")
+        self.assertIn('href="../index.html" data-version-link>Python 3.11', nested)
+        self.assertIn('href="../3.12/index.html" data-version-link aria-current="page">Python 3.12', nested)
 
     def test_version_notes_are_shown_in_both_languages(self):
         pages, _ = render(report(notes=["pypyBeta"]))
-        for language in ("en", "fr"):
-            self.assertIn(f'<p class="version-warning">{escape(TRANSLATIONS[language]["pypyBeta"])}</p>', pages[language])
+        for language in ("en",):
+            self.assertIn(f'<p class="version-warning">{escape(COPY["pypyBeta"])}</p>', pages[language])
         pages, _ = render(report())
         self.assertNotIn("version-warning", pages["en"])
 
@@ -218,8 +220,8 @@ class BlockerTests(unittest.TestCase):
                                     "blocker": {"name": "rpds-py", "requirement": "rpds-py>=0.25.0", "version": "2026.9.1",
                                                 "cause": "otherAbi", "published": ["pypy312_pp73"]}}
         pages, _ = render(data)
-        for language in ("en", "fr"):
-            copy = TRANSLATIONS[language]
+        for language in ("en",):
+            copy = COPY
             self.assertIn(copy["statuses"]["dependency"], pages[language])
             self.assertIn(copy["blockersTitle"], pages[language])
             self.assertIn(copy["blockerPublished"].format(name="rpds-py 2026.9.1", published="pypy312_pp73"),
@@ -228,7 +230,7 @@ class BlockerTests(unittest.TestCase):
 
     def test_no_blockers_no_table(self):
         pages, _ = render(report())
-        self.assertNotIn(TRANSLATIONS["en"]["blockersTitle"], pages["en"])
+        self.assertNotIn(COPY["blockersTitle"], pages["en"])
 
 
 class DeepLinkTests(unittest.TestCase):
@@ -251,8 +253,8 @@ class DeepLinkTests(unittest.TestCase):
     def test_packages_copy_the_install_and_import_commands(self):
         pages, _ = render(report())
         command = 'python -m pip install --only-binary=:all: lxml==6.1.3\npython -c "import lxml.etree"\n'
-        self.assertIn(f'data-copy="{escape(command)}"', pages["fr"])
-        self.assertIn(TRANSLATIONS["fr"]["copyReproduction"], pages["fr"])
+        self.assertIn(f'data-copy="{escape(command)}"', pages["en"])
+        self.assertIn(COPY["copyReproduction"], pages["en"])
 
 
 class FunctionalCheckViewTests(unittest.TestCase):
@@ -263,8 +265,8 @@ class FunctionalCheckViewTests(unittest.TestCase):
         item["outcomes"]["cpython"] = {"status": "passed", "detail": "", "level": "functional"}
         item["outcomes"]["pypy"] = {"status": "passed", "detail": "", "level": "import"}
         pages, _ = render(data)
-        for language in ("en", "fr"):
-            copy = TRANSLATIONS[language]
+        for language in ("en",):
+            copy = COPY
             page = pages[language]
             self.assertIn(f'<span class="status passed import-only">{escape(copy["importOnly"])}</span>', page)
             self.assertIn(escape(copy["checkTitle"]), page)
@@ -276,9 +278,9 @@ class FunctionalCheckViewTests(unittest.TestCase):
         data["packages"]["items"][0]["outcomes"]["pypy"] = {
             "status": "functionError", "detail": "AssertionError: wrong tag", "level": "functional"}
         pages, _ = render(data)
-        self.assertIn(TRANSLATIONS["en"]["statuses"]["functionError"], pages["en"])
+        self.assertIn(COPY["statuses"]["functionError"], pages["en"])
         self.assertIn("AssertionError: wrong tag", pages["en"])
-        self.assertIn(escape(TRANSLATIONS["en"]["noCheck"]), pages["en"])
+        self.assertIn(escape(COPY["noCheck"]), pages["en"])
 
 
 class InterpreterTests(unittest.TestCase):
@@ -286,16 +288,16 @@ class InterpreterTests(unittest.TestCase):
         pages, _ = render(report())
         self.assertIn('<progress max="4" value="0.98"', pages["en"])
         self.assertIn("×0.98", pages["en"])
-        self.assertIn(TRANSLATIONS["en"]["gilUnknown"], pages["en"])
-        self.assertIn(TRANSLATIONS["fr"]["statuses"]["timeout"], pages["fr"])
+        self.assertIn(COPY["gilUnknown"], pages["en"])
+        self.assertIn(COPY["statuses"]["timeout"], pages["en"])
         self.assertIn("<code>pypy312_pp80</code>", pages["en"])
 
     def test_reports_the_gil_state_when_the_interpreter_names_it(self):
         data = report()
         data["runtimes"][0]["threads"].update(gil=False, speedup=3.7)
         pages, _ = render(data)
-        self.assertIn(TRANSLATIONS["en"]["gilDisabled"], pages["en"])
-        self.assertIn(TRANSLATIONS["fr"]["gilDisabled"], pages["fr"])
+        self.assertIn(COPY["gilDisabled"], pages["en"])
+        self.assertIn(COPY["gilDisabled"], pages["en"])
 
 
 def benchmark_row(**medians):
@@ -307,9 +309,9 @@ def benchmark_row(**medians):
 
 
 class PerformancePageTests(unittest.TestCase):
-    def page(self, rows, language="en"):
+    def page(self, rows):
         pages, _ = render(report(benchmarks=rows))
-        return pages[language]
+        return pages["en"]
 
     def test_shows_times_ratios_and_the_geometric_mean(self):
         page = self.page([benchmark_row(cpython=2.0, pypy=0.5)])
@@ -318,17 +320,17 @@ class PerformancePageTests(unittest.TestCase):
         self.assertIn("×4", page)
         self.assertIn("5 timed rounds", page)
 
-    def test_slower_results_and_french_decimals(self):
-        page = self.page([benchmark_row(cpython=1.0, pypy=2.5)], "fr")
-        self.assertIn('<span class="ratio slower">2,5 fois plus lent</span>', page)
-        self.assertIn('<span class="time">2,5 s</span>', page)
+    def test_slower_results(self):
+        page = self.page([benchmark_row(cpython=1.0, pypy=2.5)])
+        self.assertIn('<span class="ratio slower">2.5× slower</span>', page)
+        self.assertIn('<span class="time">2.5 s</span>', page)
 
     def test_failed_benchmarks_show_their_status(self):
         page = self.page([benchmark_row(cpython=1.0, pypy={"status": "different", "detail": "Expected: 1"})])
         self.assertIn('<span class="status different">Different</span>', page)
 
     def test_a_report_without_benchmarks_says_so(self):
-        self.assertIn(TRANSLATIONS["en"]["performanceEmpty"], self.page([]))
+        self.assertIn(COPY["performanceEmpty"], self.page([]))
 
     def test_the_speed_chart_uses_a_logarithmic_scale(self):
         earlier = snapshot(report(generatedAt="2026-11-18T05:00:00+00:00",
@@ -355,17 +357,17 @@ class HistoryPageTests(unittest.TestCase):
 
     def test_a_single_run_explains_how_the_history_grows(self):
         pages, saved = render(report())
-        self.assertIn(TRANSLATIONS["en"]["historyFirst"], pages["en"])
+        self.assertIn(COPY["historyFirst"], pages["en"])
         self.assertIn("<circle", pages["en"])
         self.assertNotIn("<polyline", pages["en"])
 
     def test_several_runs_draw_lines_and_a_table_view(self):
         pages, _ = render(report(), self.previous("2026-11-11T05:00:00+00:00", "2026-11-18T05:00:00+00:00"))
-        self.assertNotIn(TRANSLATIONS["en"]["historyFirst"], pages["en"])
+        self.assertNotIn(COPY["historyFirst"], pages["en"])
         self.assertIn("<polyline", pages["en"])
         for day in ("2026-11-11", "2026-11-18", "2026-11-25"):
             self.assertIn(f"<th scope=\"row\">{day}</th>", pages["en"])
-        self.assertIn(TRANSLATIONS["fr"]["historyTable"], pages["fr"])
+        self.assertIn(COPY["historyTable"], pages["en"])
 
     def test_the_published_history_contains_every_run_once(self):
         first = published_history(report(generatedAt="2026-11-11T05:00:00+00:00"))
@@ -400,15 +402,15 @@ class HistoryModuleTests(unittest.TestCase):
 
 
 class ObservationTests(unittest.TestCase):
-    def describe(self, status, detail, language="en"):
-        return describe_observation({"status": status, "detail": detail}, language, TRANSLATIONS[language])
+    def describe(self, status, detail):
+        return describe_observation({"status": status, "detail": detail}, COPY)
 
     def test_phrases_values_and_exceptions(self):
         self.assertEqual(self.describe("passed", "int: 6"), "Returns 6 (int)")
         self.assertEqual(self.describe("passed", "exception: ValueError"), "Raises ValueError")
         self.assertEqual(self.describe("different", "unexpected exception: AttributeError"),
                          "Raises an unexpected AttributeError")
-        self.assertEqual(self.describe("different", "NoneType: None", "fr"), "Renvoie None")
+        self.assertEqual(self.describe("different", "NoneType: None"), "Returns None")
 
     def test_leaves_measurement_problems_unchanged(self):
         detail = "Expected by the corpus: int: 6\nObserved: int: 7"
