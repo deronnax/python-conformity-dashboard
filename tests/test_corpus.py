@@ -96,9 +96,14 @@ class ReferenceTests(unittest.TestCase):
                 self.assertIn("cpython", reference.numpy)
 
     def test_the_default_version_is_at_the_root(self):
-        layout = measure.site_layout(REFERENCES["3.11"])
-        self.assertEqual(layout["current"], "3.11")
-        self.assertEqual(dict(layout["versions"]), {"3.12": "", "3.11": "3.11/"})
+        layout = measure.site_layout(REFERENCES["3.12"])
+        self.assertEqual(layout["current"], "3.12")
+        self.assertEqual(dict(layout["versions"]), {"3.12": "3.12/", "3.11": ""})
+        self.assertEqual(DEFAULT, "3.11")
+
+    def test_the_beta_pypy_is_flagged(self):
+        self.assertEqual(REFERENCES["3.12"].notes, ("pypyBeta",))
+        self.assertEqual(REFERENCES["3.11"].notes, ())
 
 
 if __name__ == "__main__":

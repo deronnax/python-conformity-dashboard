@@ -2,7 +2,7 @@
 
 [Public dashboard](https://deronnax.github.io/python-conformity-dashboard/)
 
-This dashboard compares observable behavior of the standard library across Python implementations, one Python version at a time. Python 3.12 is measured against CPython 3.12.15 and shown at the site root; Python 3.11 is measured against CPython 3.11.17 and shown under `/3.11/`. A switch at the top of the page moves between them. In each version, CPython, PyPy and GraalPy all implement that version, so a difference is never a version difference. The corpus covers 17 modules. It includes SQLite transactions, threads appending to one list, partial zlib streams, asyncio task groups, time zone transitions and atomic regular expressions.
+This dashboard compares observable behavior of the standard library across Python implementations, one Python version at a time. Python 3.11 is measured against CPython 3.11.17 and shown at the site root; Python 3.12 is measured against CPython 3.12.15 and shown under `/3.12/`. Python 3.11 is the default because PyPy for Python 3.12 is still a beta (PyPy 8.0.1), which the 3.12 page says. The former `/3.11/` address redirects to the root. A switch at the top of the page moves between them. In each version, CPython, PyPy and GraalPy all implement that version, so a difference is never a version difference. The corpus covers 17 modules. It includes SQLite transactions, threads appending to one list, partial zlib streams, asyncio task groups, time zone transitions and atomic regular expressions.
 
 ## Local measurement
 
@@ -44,7 +44,7 @@ Each run adds a compact snapshot (counts per status, interpreter and view, relat
 
 ## GitHub Actions
 
-The **Python Conformity** workflow runs on Linux x86-64 on every push to `main`, every Monday and on demand. It measures each Python version in its own job, in parallel, then assembles the two dashboards into one site. Each job first runs the unit tests with the downloaded CPython. It downloads the prebuilt binaries of CPython, PyPy and GraalPy Community for its version and checks their digests. The Python 3.12 job also measures the free-threaded CPython 3.14 and RustPython, which implement Python 3.14. The CPython digests come from the `SHA256SUMS` file of the release. It also checks the digest of the RustPython 0.6.0 source archive, then builds the interpreter with the bundled standard library and the `_sqlite3` module.
+The **Python Conformity** workflow runs on Linux x86-64 on every push to `main`, every Monday and on demand. It measures each Python version in its own job, in parallel, then assembles the two dashboards into one site. Each job first runs the unit tests with the downloaded CPython. It downloads the prebuilt binaries of CPython, PyPy and GraalPy Community for its version and checks their digests. The Python 3.11 job, the default version, also measures the free-threaded CPython 3.14 and RustPython, which implement Python 3.14. The CPython digests come from the `SHA256SUMS` file of the release. It also checks the digest of the RustPython 0.6.0 source archive, then builds the interpreter with the bundled standard library and the `_sqlite3` module.
 
 In the run summary, download `dashboard-conformity`, unzip the archive and open `index.html`. The workflow enables the application and package scenarios. An observed incompatibility is a measurement result. A failure of the CPython reference in the standard library corpus turns the job red and stays visible in the report when it could be produced.
 

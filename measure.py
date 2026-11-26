@@ -361,6 +361,7 @@ def main():
                 "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 "platform": f"{platform.system()} {platform.release()} · {platform.machine()}",
                 "reference": reference.cpython,
+                "notes": list(reference.notes),
                 "runtimes": runtimes,
                 "common": comparisons(executables, directory, tests.parent, reference),
                 "upstream": upstream_results(executables, tests, directory, reference),

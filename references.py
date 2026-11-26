@@ -22,6 +22,8 @@ class Reference:
     # NumPy 2.4.4 wheels for the scenario, per interpreter. An interpreter without
     # an entry has no pinned wheel and reports "No wheel".
     numpy: dict = field(default_factory=dict)
+    # Keys of notes the dashboard shows for this version, such as a beta interpreter.
+    notes: tuple = ()
 
     @property
     def minor(self):
@@ -48,7 +50,7 @@ class Reference:
         return f"https://docs.python.org/{self.minor}/library/"
 
 
-# The 3.14 free-threaded wheel is used by the free-threaded build, measured with 3.12.
+# The free-threaded build implements Python 3.14 and is measured with the default version.
 FREETHREADED_NUMPY = Wheel(
     PYPI + "5f/86/2acbda8cc2af5f3d7bfc791192863b9e3e19674da7b5e533fded124d1299/"
     "numpy-2.4.4-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
@@ -65,7 +67,7 @@ REFERENCES = {
             "81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e",
         ),
         "freethreaded": FREETHREADED_NUMPY,
-    }),
+    }, notes=("pypyBeta",)),
     # The PyPy wheel is built for the PyPy 7.3 ABI, which PyPy 8 does not load: the
     # scenario reports it as another ABI. Oracle's GraalPy wheels for this ABI stop
     # at NumPy 1.26.4.
@@ -80,6 +82,8 @@ REFERENCES = {
             "numpy-2.4.4-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
             "9b2aec6af35c113b05695ebb5749a787acd63cafc83086a05771d1e1cd1e555f",
         ),
+        "freethreaded": FREETHREADED_NUMPY,
     }),
 }
-DEFAULT = "3.12"
+# PyPy for Python 3.12 is a beta, so the dashboard opens on Python 3.11.
+DEFAULT = "3.11"
