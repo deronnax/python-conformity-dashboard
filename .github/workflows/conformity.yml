@@ -1,13 +1,14 @@
 name: Python Conformity
 
+# A measurement takes about 25 minutes. It runs every Monday, since packages and
+# wheels change without a push, and when the workflow is run by hand (on a branch,
+# to try a change to the harness). Pushes and pull requests only run the unit
+# tests and regenerate the pages from the published results. Only main publishes.
 on:
   push:
     branches: [main]
-  # Pull requests are measured too. Only a run on main publishes the site.
   pull_request:
     branches: [main]
-  # Package releases and wheels change without a push, so the dashboard is
-  # measured again every Monday.
   schedule:
     - cron: "23 5 * * 1"
   workflow_dispatch:
@@ -15,186 +16,141 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: bash # -e and -o pipefail
+
+env:
+  MEASURE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+
 jobs:
-  measure:
-    name: measure (Python ${{ matrix.python }})
+  dashboard:
+    name: Python ${{ matrix.python }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
-      # Each version is published only when both measurements succeed.
       fail-fast: false
       matrix:
         include:
-          - python: "3.12"
-            cpython: 3.12.15
-            cpython-sha256: 5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124
-            pypy-url: https://downloads.python.org/pypy/pypy3.12-v8.0.1-linux64.tar.gz
-            pypy-sha256: aeed27797777296d9c94e53bdfa608804696dbd4ff9f2213003cce064ee46ef8
-            graalpy-url: https://github.com/oracle/graalpython/releases/download/graal-25.2.4/graalpy3.12-community-25.2.4-linux-amd64.tar.gz
-            graalpy-sha256: 98af303a6b714bde39077354733254f78023ddef06d61e14cb66a3a01f10ae82
-            freethreaded: false
+          # The default version is the site root. PyPy for Python 3.12 is a beta.
           - python: "3.11"
+            folder: ""
             cpython: 3.11.17
             cpython-sha256: 7cc8d9dce9ea23c31267e7f244005c8979da04794b7737a3a30e62b03abeb120
-            pypy-url: https://downloads.python.org/pypy/pypy3.11-v8.0.1-linux64.tar.gz
+            pypy: https://downloads.python.org/pypy/pypy3.11-v8.0.1-linux64.tar.gz
             pypy-sha256: 706965bcf372752ba69dafd59d860e51bc2fadbb0f8a47cec3426125d7058ceb
             # GraalPy 24.2 is the last release that implements Python 3.11.
-            graalpy-url: https://github.com/oracle/graalpython/releases/download/graal-24.2.2/graalpy-community-24.2.2-linux-amd64.tar.gz
+            graalpy: https://github.com/oracle/graalpython/releases/download/graal-24.2.2/graalpy-community-24.2.2-linux-amd64.tar.gz
             graalpy-sha256: 384642677b76c26d6be1cf6bce2bc94d49df53845dd506414d95e2322bc9ac5d
-            # The free-threaded build implements Python 3.14. It is measured once,
-            # with the default version.
+            # The free-threaded build implements Python 3.14: it is measured once.
             freethreaded: true
+          - python: "3.12"
+            folder: 3.12/
+            cpython: 3.12.15
+            cpython-sha256: 5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124
+            pypy: https://downloads.python.org/pypy/pypy3.12-v8.0.1-linux64.tar.gz
+            pypy-sha256: aeed27797777296d9c94e53bdfa608804696dbd4ff9f2213003cce064ee46ef8
+            graalpy: https://github.com/oracle/graalpython/releases/download/graal-25.2.4/graalpy3.12-community-25.2.4-linux-amd64.tar.gz
+            graalpy-sha256: 98af303a6b714bde39077354733254f78023ddef06d61e14cb66a3a01f10ae82
+            freethreaded: false
     env:
-      PYTHON_VERSION: ${{ matrix.python }}
-      CPYTHON_RELEASE: ${{ matrix.cpython }}
+      PYTHON: runtimes/cpython/bin/python${{ matrix.python }}
+      # The published dashboard of this version.
+      PUBLISHED: https://${{ github.repository_owner }}.github.io/python-conformity-dashboard/${{ matrix.folder }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           persist-credentials: false
 
-      - name: Download the prebuilt interpreters
-        shell: bash
-        env:
-          CPYTHON_SHA256: ${{ matrix.cpython-sha256 }}
-          PYPY_URL: ${{ matrix.pypy-url }}
-          PYPY_SHA256: ${{ matrix.pypy-sha256 }}
-          GRAALPY_URL: ${{ matrix.graalpy-url }}
-          GRAALPY_SHA256: ${{ matrix.graalpy-sha256 }}
-          FREETHREADED: ${{ matrix.freethreaded }}
+      # Regenerating the pages needs only CPython.
+      - name: Download the interpreters
         run: |
-          set -euo pipefail
-          runtimes="$RUNNER_TEMP/conformity"
-          mkdir -p "$runtimes"
-          cd "$runtimes"
-
-          extract() {
-            local hash="$1" url="$2" target="$3"
-            shift 3
-            curl -fLsS --retry 3 --max-time 120 "$@" "$url" -o runtime.tar.gz
-            printf '%s  runtime.tar.gz\n' "$hash" | sha256sum --check
-            mkdir -p "$target"
-            tar -xzf runtime.tar.gz --strip-components=1 -C "$target"
-            rm runtime.tar.gz
+          fetch() {  # sha256, url, folder
+            curl -fsSL "$2" -o archive.tar.gz
+            echo "$1  archive.tar.gz" | sha256sum --check
+            mkdir -p "runtimes/$3" && tar -xzf archive.tar.gz --strip-components=1 -C "runtimes/$3"
           }
-
-          extract "$CPYTHON_SHA256" \
-            "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${CPYTHON_RELEASE}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz" cpython
-          extract "$PYPY_SHA256" "$PYPY_URL" pypy
-          extract "$GRAALPY_SHA256" "$GRAALPY_URL" graalpy
-          if [ "$FREETHREADED" = true ]; then
-            extract 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d \
-              https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
+          fetch ${{ matrix.cpython-sha256 }} https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${{ matrix.cpython }}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz cpython
+          if $MEASURE; then
+            fetch ${{ matrix.pypy-sha256 }} ${{ matrix.pypy }} pypy
+            fetch ${{ matrix.graalpy-sha256 }} ${{ matrix.graalpy }} graalpy
+            fetch bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython
           fi
-          extract bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d \
-            https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython-src
+          if $MEASURE && ${{ matrix.freethreaded }}; then
+            fetch 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
+          fi
 
-      - name: Test the generator and the harness
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$RUNNER_TEMP/conformity/cpython/bin/python$PYTHON_VERSION" -B -m unittest discover -s tests
+      - name: Run the unit tests
+        run: $PYTHON -B -m unittest discover -s tests
 
       - name: Compile RustPython
-        shell: bash
-        working-directory: ${{ runner.temp }}/conformity/rustpython-src
+        if: env.MEASURE == 'true'
+        working-directory: runtimes/rustpython
         run: |
-          set -euo pipefail
           rustup toolchain install 1.99.0 --profile minimal
           cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
 
-      - name: Measure and generate the dashboard
-        shell: bash
-        env:
-          FREETHREADED: ${{ matrix.freethreaded }}
+      # GitHub Pages replaces the whole site on each deployment, so the published
+      # history is downloaded, extended by this run and published again.
+      - name: Measure
+        if: env.MEASURE == 'true'
         run: |
-          set -euo pipefail
-          runtimes="$RUNNER_TEMP/conformity"
-          curl -fLsS --retry 3 --max-time 120 "https://www.python.org/ftp/python/$CPYTHON_RELEASE/Python-$CPYTHON_RELEASE.tar.xz" \
-            -o "$runtimes/Python-$CPYTHON_RELEASE.tar.xz"
-          # GitHub Pages replaces the site on each deployment, so the published
-          # histories are downloaded, extended by this run and published again.
-          # Before versions had their own folder, every run went to the root
-          # history, which is why it is read for every version.
-          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
-          histories=()
-          for folder in "" "$PYTHON_VERSION/"; do
-            target="$runtimes/history-$(echo "${folder:-root}" | tr -d /).json"
-            if curl -fsSL --retry 2 --max-time 60 "$site/${folder}history.json" -o "$target"; then
-              histories+=(--history "$target")
-            else
-              echo "No published history at /${folder}history.json."
-            fi
-          done
-          extras=(--rustpython "$runtimes/rustpython-src/target/release/rustpython")
-          if [ "$FREETHREADED" = true ]; then
-            extras+=(--freethreaded "$runtimes/freethreaded/bin/python3.14t")
-          fi
-          "$runtimes/cpython/bin/python$PYTHON_VERSION" -B measure.py \
-            --reference "$PYTHON_VERSION" \
-            "${histories[@]}" \
-            --pypy "$runtimes/pypy/bin/pypy$PYTHON_VERSION" \
-            --graalpy "$runtimes/graalpy/bin/graalpy" \
-            "${extras[@]}" \
-            --benchmarks \
-            --applications \
-            --packages \
-            --source "$runtimes/Python-$CPYTHON_RELEASE.tar.xz" | tee -a "$GITHUB_STEP_SUMMARY"
+          curl -fsSL "${PUBLISHED}history.json" -o history.json || echo "No published history yet."
+          $PYTHON -B measure.py --reference ${{ matrix.python }} --history history.json \
+            --pypy runtimes/pypy/bin/pypy${{ matrix.python }} \
+            --graalpy runtimes/graalpy/bin/graalpy \
+            --rustpython runtimes/rustpython/target/release/rustpython \
+            ${{ matrix.freethreaded && '--freethreaded runtimes/freethreaded/bin/python3.14t' || '' }} \
+            --benchmarks --applications --packages | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload the dashboard of this version
-        if: ${{ !cancelled() && hashFiles('dist/index.html') != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - name: Regenerate the pages from the published results
+        if: env.MEASURE == 'false'
+        run: |
+          curl -fsSL "${PUBLISHED}results.json" -o results.json
+          curl -fsSL "${PUBLISHED}history.json" -o history.json
+          $PYTHON -B dashboard.py results.json --history history.json --version ${{ matrix.python }}
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dashboard-${{ matrix.python }}
           path: dist/
-          if-no-files-found: error
 
   assemble:
-    needs: measure
+    needs: dashboard
     runs-on: ubuntu-24.04
     steps:
-      # The default version, 3.11, is the site root: PyPy for Python 3.12 is still a
-      # beta. The others are served from a folder.
-      - name: Download the Python 3.11 dashboard
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dashboard-3.11
           path: site/
-      - name: Download the Python 3.12 dashboard
-        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: dashboard-3.12
           path: site/3.12/
 
-      # The 3.11 dashboard used to live under /3.11/, with a French page under
-      # fr/. Both now redirect to the English page at the root.
-      - name: Redirect the former 3.11 address
-        shell: bash
+      # Python 3.11 used to be served under /3.11/, with a French page under fr/.
+      - name: Redirect the former addresses
         run: |
-          set -euo pipefail
-          for folder in 3.11 3.11/fr; do
-            mkdir -p "site/$folder"
-            up=$(echo "$folder" | sed 's|[^/]*|..|g')
-            target="$up/"
-            printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=%s"><link rel="canonical" href="%s"><script>location.replace("%s" + location.search + location.hash)</script><a href="%s">Python 3.11</a>\n' \
-              "$target" "$target" "$target" "$target" > "site/$folder/index.html"
-          done
+          redirect() {  # folder, target
+            mkdir -p "site/$1"
+            echo "<!doctype html><meta http-equiv=refresh content=\"0; url=$2\"><script>location.replace('$2' + location.search + location.hash)</script>" > "site/$1/index.html"
+          }
+          redirect 3.11 ../
+          redirect 3.11/fr ../../
 
-      - name: Upload the dashboard artifact
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dashboard-conformity
           path: site/
-          if-no-files-found: error
 
-      - name: Prepare the GitHub Pages upload
-        if: ${{ github.ref == 'refs/heads/main' }}
+      - if: github.ref == 'refs/heads/main'
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
           path: site/
 
   publish:
     needs: assemble
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     permissions:
       pages: write
@@ -202,10 +158,7 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    concurrency:
-      group: pages
-      cancel-in-progress: false
+    concurrency: pages
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

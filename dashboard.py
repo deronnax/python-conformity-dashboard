@@ -15,6 +15,7 @@ from urllib.parse import quote
 from dashboard_content import COPY
 from history import dump as dump_history, load as load_history, merge, snapshot
 from performance import geometric_means, speedup
+from references import REFERENCES, site_layout
 
 
 ROOT = Path(__file__).resolve().parent
@@ -730,9 +731,12 @@ def main():
     parser.add_argument("report", type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
     parser.add_argument("--history", type=Path, help="history.json from an earlier run, extended with this report")
+    parser.add_argument("--version", choices=REFERENCES,
+                        help="Python version of the report, to link the dashboards of the other versions")
     arguments = parser.parse_args()
     previous = load_history(arguments.history) if arguments.history else []
-    generate(json.loads(arguments.report.read_text(encoding="utf-8")), arguments.output, previous)
+    site = site_layout(REFERENCES[arguments.version]) if arguments.version else None
+    generate(json.loads(arguments.report.read_text(encoding="utf-8")), arguments.output, previous, site=site)
 
 
 if __name__ == "__main__":
