@@ -37,6 +37,8 @@ COPY = {
     "blockersIntro": "When pip stops on a dependency, the package is attributed to that dependency rather than counted as incompatible itself.",
     "blockerDependency": "Dependency",
     "pythonVersions": "Python version",
+    "noPypy313": "PyPy has no release for Python 3.13, so it is not measured here.",
+    "noPypy314": "PyPy and GraalPy have no release for Python 3.14, so they are not measured here.",
     "pypyBeta": "PyPy for Python 3.12 is a beta release (PyPy 8.0.1). Its results show the state of a release in progress.",
     "pythonVersionsIntro": "Each version is measured separately: CPython, PyPy and GraalPy all implement the selected Python version.",
     "crossVersionNote": "Python {version} · other version",
