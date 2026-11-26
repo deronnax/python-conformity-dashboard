@@ -1,6 +1,7 @@
 """Provision pinned third-party wheels and collect application results."""
 
 import hashlib
+import inspect
 import json
 import platform
 import shutil
@@ -8,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import urlopen
 from zipfile import BadZipFile, ZipFile
+
+from application_checks import CHECKS as SCENARIOS
 
 
 @dataclass(frozen=True)
@@ -108,5 +111,6 @@ def application_results(executables, directory, invoke, numpy):
             except ValueError:
                 print(f"{runtime} returned unreadable output for {name}")
                 outcomes[runtime] = {"status": "blocked", "detail": ""}
-        results.append({"id": name, "package": package, "version": version, "outcomes": outcomes})
+        results.append({"id": name, "package": package, "version": version,
+                        "code": inspect.getsource(SCENARIOS[name]), "outcomes": outcomes})
     return results

@@ -2,6 +2,7 @@
 
 import json
 import sys
+import traceback
 
 
 def django_template():
@@ -91,8 +92,10 @@ if __name__ == "__main__":
     sys.path.insert(0, sys.argv[2])
     try:
         CHECKS[sys.argv[1]]()
-    except Exception as exc:
-        outcome = {"status": "error", "detail": f"{type(exc).__name__}: {exc}"}
+    except Exception:
+        # The end of the traceback, with the wheel directory shortened.
+        lines = traceback.format_exc().replace(sys.argv[2], "<wheels>").strip().splitlines()
+        outcome = {"status": "error", "detail": "\n".join(lines[-15:])}
     else:
         outcome = {"status": "passed", "detail": ""}
     print(json.dumps(outcome))

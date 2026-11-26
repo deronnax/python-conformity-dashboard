@@ -26,6 +26,7 @@ COPY = {
     "importOnly": "Import only",
     "noCheck": "Import only: no functional check yet",
     "checkTitle": "Functional check",
+    "scenarioCode": "Code",
     "checkLevels": "{functional} with a functional check · {imported} import only",
     "copyReproduction": "Copy to reproduce",
     "copied": "Copied",

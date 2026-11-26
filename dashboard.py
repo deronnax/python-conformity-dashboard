@@ -276,7 +276,7 @@ def render_applications(report, copy):
         fragment = anchor("scenario", row["id"])
         cells = [
             f'<th scope="row">{permalink(fragment, copy)}<strong>{escape(row["package"])}</strong> {escape(row["version"])}'
-            f'<span class="scenario-title">{escape(title)}</span></th>'
+            f'<span class="scenario-title">{escape(title)}</span>{code_details(row.get("code"), copy)}</th>'
         ]
         cells.extend(f'<td>{detailed_badge(row["outcomes"][runtime["id"]], copy)}</td>' for runtime in runtimes)
         listing.append(f'<tr id="{escape(fragment)}">' + "".join(cells) + "</tr>")
@@ -315,6 +315,13 @@ def package_cell(outcome, copy):
     detail = blocker_text(blocker, copy) + "\n\n" + outcome_detail(outcome)
     return (f'<details class="package-detail"><summary>{badge(outcome, copy)}</summary><pre>{escape(detail.strip())}</pre>'
             f'</details><span class="blocker">{escape(copy["blockerVia"])} <code>{escape(blocker["name"])}</code></span>')
+
+
+def code_details(code, copy):
+    """The code of an application scenario, folded under its name."""
+    if not code:
+        return ""
+    return f'<details class="check"><summary>{escape(copy["scenarioCode"])}</summary><pre>{escape(code)}</pre></details>'
 
 
 def check_details(row, copy):

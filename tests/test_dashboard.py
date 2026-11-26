@@ -54,6 +54,7 @@ def report(**overrides):
         }],
         "applications": [{
             "id": "numpy-array", "package": "NumPy", "version": "2.4.4",
+            "code": "def numpy_array():\n    import numpy as np\n",
             "outcomes": {"cpython": passed(),
                          "pypy": {"status": "otherAbi", "detail": "loads pp80"}},
         }],
@@ -100,6 +101,10 @@ class GenerateTests(unittest.TestCase):
     def test_the_former_french_page_redirects_to_english(self):
         pages, _ = render(report())
         self.assertIn('location.replace("../" + location.search + location.hash)', pages["fr"])
+
+    def test_shows_the_code_of_each_scenario(self):
+        pages, _ = render(report())
+        self.assertIn(f'<summary>{COPY["scenarioCode"]}</summary><pre>def numpy_array():', pages["en"])
 
     def test_accepts_reports_without_optional_measurements(self):
         legacy = report(applications=[], packages=None)
