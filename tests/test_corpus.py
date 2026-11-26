@@ -101,6 +101,10 @@ class ReferenceTests(unittest.TestCase):
         self.assertEqual(dict(layout["versions"]), {"3.12": "3.12/", "3.11": ""})
         self.assertEqual(DEFAULT, "3.11")
 
+    def test_the_free_threaded_build_is_left_out_of_the_packages(self):
+        self.assertEqual(measure.NOT_IN_PACKAGES, {"freethreaded"})
+        self.assertIn("rustpython", measure.PURE_PYTHON_ONLY)
+
     def test_the_beta_pypy_is_flagged(self):
         self.assertEqual(REFERENCES["3.12"].notes, ("pypyBeta",))
         self.assertEqual(REFERENCES["3.11"].notes, ())

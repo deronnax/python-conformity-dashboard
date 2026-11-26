@@ -32,6 +32,8 @@ RUNTIME_NAMES = {"cpython": "CPython", "pypy": "PyPy", "graalpy": "GraalPy", "ru
 # RustPython has no C API, so packages with extension modules cannot load on it.
 # It is tested only on releases that publish a pure-Python wheel.
 PURE_PYTHON_ONLY = {"rustpython"}
+# The free-threaded build is not in the PyPI package list: it targets Python 3.14.
+NOT_IN_PACKAGES = {"freethreaded"}
 # Interpreters that run the CPython tests. RustPython implements another Python
 # version; its column says so.
 UPSTREAM_RUNTIMES = ("cpython", "pypy", "graalpy", "rustpython")
@@ -312,7 +314,7 @@ def main():
     parser.add_argument("--pypy", help="PyPy binary implementing that version")
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
     parser.add_argument("--rustpython", help="RustPython binary. Tested on packages with a pure-Python wheel only.")
-    parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to the shared cases when given.")
+    parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to every view but the packages when given.")
     parser.add_argument("--history", type=Path, action="append", default=[],
                         help="history.json from an earlier run, extended by this one. Repeatable: only "
                              "entries measured against the same Python version are kept")
@@ -351,7 +353,8 @@ def main():
                 "upstream": upstream_results(executables, tests, directory, reference),
                 "benchmarks": benchmarks,
                 "applications": application_results(executables, directory, invoke, reference.numpy) if args.applications else [],
-                "packages": package_results(executables, directory, reference.ranking, PURE_PYTHON_ONLY) if args.packages else None,
+                "packages": package_results({runtime: path for runtime, path in executables.items() if runtime not in NOT_IN_PACKAGES},
+                                              directory, reference.ranking, PURE_PYTHON_ONLY) if args.packages else None,
             }
             previous = [entry for path in args.history for entry in load_history(path)
                         if not language_mismatch(entry.get("reference", ""), reference.cpython)]

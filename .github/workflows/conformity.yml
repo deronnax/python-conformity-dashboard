@@ -32,7 +32,7 @@ jobs:
             pypy-sha256: aeed27797777296d9c94e53bdfa608804696dbd4ff9f2213003cce064ee46ef8
             graalpy-url: https://github.com/oracle/graalpython/releases/download/graal-25.2.4/graalpy3.12-community-25.2.4-linux-amd64.tar.gz
             graalpy-sha256: 98af303a6b714bde39077354733254f78023ddef06d61e14cb66a3a01f10ae82
-            extras: false
+            freethreaded: false
           - python: "3.11"
             cpython: 3.11.17
             cpython-sha256: 7cc8d9dce9ea23c31267e7f244005c8979da04794b7737a3a30e62b03abeb120
@@ -41,9 +41,9 @@ jobs:
             # GraalPy 24.2 is the last release that implements Python 3.11.
             graalpy-url: https://github.com/oracle/graalpython/releases/download/graal-24.2.2/graalpy-community-24.2.2-linux-amd64.tar.gz
             graalpy-sha256: 384642677b76c26d6be1cf6bce2bc94d49df53845dd506414d95e2322bc9ac5d
-            # The free-threaded build and RustPython implement Python 3.14. They are
-            # measured once, with the default version.
-            extras: true
+            # The free-threaded build implements Python 3.14. It is measured once,
+            # with the default version.
+            freethreaded: true
     env:
       PYTHON_VERSION: ${{ matrix.python }}
       CPYTHON_RELEASE: ${{ matrix.cpython }}
@@ -60,7 +60,7 @@ jobs:
           PYPY_SHA256: ${{ matrix.pypy-sha256 }}
           GRAALPY_URL: ${{ matrix.graalpy-url }}
           GRAALPY_SHA256: ${{ matrix.graalpy-sha256 }}
-          EXTRAS: ${{ matrix.extras }}
+          FREETHREADED: ${{ matrix.freethreaded }}
         run: |
           set -euo pipefail
           runtimes="$RUNNER_TEMP/conformity"
@@ -81,12 +81,12 @@ jobs:
             "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${CPYTHON_RELEASE}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz" cpython
           extract "$PYPY_SHA256" "$PYPY_URL" pypy
           extract "$GRAALPY_SHA256" "$GRAALPY_URL" graalpy
-          if [ "$EXTRAS" = true ]; then
+          if [ "$FREETHREADED" = true ]; then
             extract 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d \
               https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
-            extract bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d \
-              https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython-src
           fi
+          extract bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d \
+            https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython-src
 
       - name: Test the generator and the harness
         shell: bash
@@ -95,7 +95,6 @@ jobs:
           "$RUNNER_TEMP/conformity/cpython/bin/python$PYTHON_VERSION" -B -m unittest discover -s tests
 
       - name: Compile RustPython
-        if: ${{ matrix.extras }}
         shell: bash
         working-directory: ${{ runner.temp }}/conformity/rustpython-src
         run: |
@@ -106,7 +105,7 @@ jobs:
       - name: Measure and generate the dashboard
         shell: bash
         env:
-          EXTRAS: ${{ matrix.extras }}
+          FREETHREADED: ${{ matrix.freethreaded }}
         run: |
           set -euo pipefail
           runtimes="$RUNNER_TEMP/conformity"
@@ -126,10 +125,9 @@ jobs:
               echo "No published history at /${folder}history.json."
             fi
           done
-          extras=()
-          if [ "$EXTRAS" = true ]; then
-            extras=(--freethreaded "$runtimes/freethreaded/bin/python3.14t"
-                    --rustpython "$runtimes/rustpython-src/target/release/rustpython")
+          extras=(--rustpython "$runtimes/rustpython-src/target/release/rustpython")
+          if [ "$FREETHREADED" = true ]; then
+            extras+=(--freethreaded "$runtimes/freethreaded/bin/python3.14t")
           fi
           "$runtimes/cpython/bin/python$PYTHON_VERSION" -B measure.py \
             --reference "$PYTHON_VERSION" \
