@@ -98,17 +98,24 @@ class RecordingRunner(DiscoverRunner):
     def get_resultclass(self):
         return RecordingResult
 '''
-# Django runs tests in parallel only when processes start with fork or spawn, and
-# Python 3.14 starts them with forkserver on Linux.
-LAUNCHER = '''import multiprocessing
-import runpy
-import sys
+# runtests.py runs through this launcher. Django runs tests in parallel only when
+# processes start with fork or spawn, and Python 3.14 starts them with forkserver on
+# Linux. runtests.py also tunes the garbage collector with gc.set_threshold, which
+# GraalPy lacks: a no-op stands in, and the page says so. The code of runtests.py
+# runs in this module, also in processes started with spawn, which import it again.
+LAUNCHER = '''import gc
+import multiprocessing
+import os
 
-if __name__ == "__main__":
+if not hasattr(gc, "set_threshold"):
+    gc.set_threshold = lambda *thresholds: None
+if __name__ == "__main__" and multiprocessing.get_start_method() == "forkserver":
     multiprocessing.set_start_method("fork", force=True)
-    sys.argv[0] = "runtests.py"
-    runpy.run_path("runtests.py", run_name="__main__")
+__file__ = os.path.join(os.path.dirname(os.path.abspath(__file__)), "runtests.py")
+with open(__file__, encoding="utf-8") as source:
+    exec(compile(source.read(), __file__, "exec"))
 '''
+NO_GC_THRESHOLD = "This interpreter has no gc.set_threshold, which runtests.py calls: the run replaces it with a no-op."
 # A test can report several outcomes, such as one per failing subtest: the most
 # severe one is kept.
 SEVERITY = {"error": 4, "failure": 3, "unexpectedSuccess": 2, "passed": 1, "skipped": 0, "expectedFailure": 0}
@@ -152,10 +159,11 @@ def run(runtime, executable, directory, labels=(), timeout=TIMEOUT):
     inherited = ("PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR")
     environment = {key: os.environ[key] for key in inherited if key in os.environ}
     environment.update(PYTHONPATH=str(source), CONFORMITY_RESULTS=str(results))
-    probe = subprocess.run([executable, "-c", "import multiprocessing; print(multiprocessing.get_start_method())"],
+    probe = subprocess.run([executable, "-c", "import gc; print(hasattr(gc, 'set_threshold'))"],
                            capture_output=True, text=True, env=environment, timeout=300)
-    script = "conformity_launcher.py" if probe.stdout.strip() == "forkserver" else "runtests.py"
-    command = [executable, script, "--settings=conformity_settings", "--parallel=auto", "--noinput", *labels]
+    note = NO_GC_THRESHOLD if probe.stdout.strip() == "False" else ""
+    command = [executable, "conformity_launcher.py", "--settings=conformity_settings", "--parallel=auto",
+               "--noinput", *labels]
     started = time.monotonic()
     # A session of its own, so a timeout also stops the worker processes.
     process = subprocess.Popen(command, cwd=source / "tests", env=environment, start_new_session=True,
@@ -174,7 +182,7 @@ def run(runtime, executable, directory, labels=(), timeout=TIMEOUT):
         status = "blocked"
     tail = "\n".join(output.strip().splitlines()[-30:]) if status != "completed" else ""
     return {"suite": "django", "project": PROJECT, "version": VERSION, "runtime": runtime, "status": status,
-            "duration": duration, "detail": tail, "tests": tests, "tracebacks": tracebacks}
+            "duration": duration, "detail": tail, "note": note, "tests": tests, "tracebacks": tracebacks}
 
 
 # The comparison keeps a page of a reasonable size: the largest groups, each with
@@ -216,7 +224,7 @@ def summarize(raws):
     for runtime, raw in raws.items():
         tests = raw["tests"]
         outcome = {"status": raw["status"], "duration": raw["duration"], "detail": raw["detail"],
-                   "counts": dict(Counter(tests.values()))}
+                   "note": raw.get("note", ""), "counts": dict(Counter(tests.values()))}
         if runtime == "cpython":
             # Tests that fail on CPython too depend on the environment, not on the interpreter.
             outcome.update(group([test for test, status in tests.items() if status in FAILING], raw))

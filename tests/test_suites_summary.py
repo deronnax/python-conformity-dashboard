@@ -8,7 +8,7 @@ import test_suites
 
 def raw(runtime, tests, tracebacks=None, status="completed"):
     return {"suite": "django", "project": "Django", "version": "5.2.19", "runtime": runtime, "status": status,
-            "duration": 90, "detail": "", "tests": tests, "tracebacks": tracebacks or {}}
+            "duration": 90, "detail": "", "note": "", "tests": tests, "tracebacks": tracebacks or {}}
 
 
 class OutcomeTests(unittest.TestCase):
@@ -30,6 +30,23 @@ class OutcomeTests(unittest.TestCase):
     def test_the_message_is_the_last_line_without_addresses(self):
         self.assertEqual(test_suites.message("Traceback\n  File x\nTypeError: <obj at 0x7f00ab>\n"),
                          "TypeError: <obj at 0x…>")
+
+
+class LauncherTests(unittest.TestCase):
+    def test_runs_runtests_in_its_own_module(self):
+        """The launcher stands in for a missing gc.set_threshold, and runs runtests.py as __main__."""
+        import subprocess
+        import sys
+        with TemporaryDirectory() as directory:
+            Path(directory, "conformity_launcher.py").write_text(test_suites.LAUNCHER, encoding="utf-8")
+            Path(directory, "runtests.py").write_text(
+                "import gc, os\ngc.set_threshold(100)\nif __name__ == '__main__':\n"
+                "    print(os.path.basename(__file__))\n", encoding="utf-8")
+            completed = subprocess.run(
+                [sys.executable, "-c", "import gc, runpy; del gc.set_threshold; "
+                 "runpy.run_path('conformity_launcher.py', run_name='__main__')"],
+                cwd=directory, capture_output=True, text=True, timeout=60)
+        self.assertEqual(completed.stdout.strip(), "runtests.py", completed.stderr)
 
 
 class SummaryTests(unittest.TestCase):

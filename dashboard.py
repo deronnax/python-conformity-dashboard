@@ -338,12 +338,14 @@ def render_suites(report, copy):
             status = escape(copy["suiteStatuses"][outcome["status"]])
             if outcome.get("detail"):
                 status = f'<details class="package-detail"><summary>{status}</summary><pre>{escape(outcome["detail"])}</pre></details>'
+            if outcome.get("note"):
+                status += f'<span class="version-note">{escape(outcome["note"])}</span>'
             if runtime["id"] == "cpython":
                 difference = escape(copy["suiteReference"])
                 failing = failed + counts.get("error", 0)
                 if failing:
                     details.append(suite_groups(outcome, copy["suiteEnvironment"].format(count=failing), copy))
-            elif "differences" in outcome:
+            elif "differences" in outcome and counts:
                 difference = f'<strong>{outcome["differences"]}</strong>'
                 if outcome["notRun"]:
                     difference += f' <span class="version-note">{escape(copy["suiteNotRun"].format(count=outcome["notRun"]))}</span>'
