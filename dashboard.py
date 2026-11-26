@@ -676,6 +676,12 @@ def render_versions(site, language, copy):
             f'{"".join(links)}</nav><p class="description">{escape(copy["pythonVersionsIntro"])}</p>')
 
 
+def render_notes(report, copy):
+    """Warnings that apply to the whole measured version, such as a beta interpreter."""
+    return "".join(f'<p class="version-warning">{escape(copy[key])}</p>'
+                   for key in report.get("notes", ()) if key in copy)
+
+
 def render_page(report, language, template, assets, history, site=None):
     copy = TRANSLATIONS[language]
     base = "../" if language == "fr" else ""
@@ -699,7 +705,7 @@ def render_page(report, language, template, assets, history, site=None):
         interpreters=render_interpreters(report, language, copy),
         performance=render_benchmarks(report, language, copy),
         history=render_history(history, copy),
-        versions=render_versions(site, language, copy),
+        versions=render_versions(site, language, copy) + render_notes(report, copy),
         common=render_comparison("common", report, language, copy),
         upstream=render_comparison("upstream", report, language, copy),
         scriptVersion=hashlib.sha256(assets["dashboard.js"]).hexdigest()[:12],

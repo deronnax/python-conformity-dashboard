@@ -198,6 +198,13 @@ class VersionSwitchTests(unittest.TestCase):
         self.assertIn('href="../../fr/index.html" data-version-link>Python 3.12', nested["fr"])
         self.assertIn('href="../3.11/index.html" data-version-link aria-current="page">Python 3.11', nested["en"])
 
+    def test_version_notes_are_shown_in_both_languages(self):
+        pages, _ = render(report(notes=["pypyBeta"]))
+        for language in ("en", "fr"):
+            self.assertIn(f'<p class="version-warning">{escape(TRANSLATIONS[language]["pypyBeta"])}</p>', pages[language])
+        pages, _ = render(report())
+        self.assertNotIn("version-warning", pages["en"])
+
     def test_a_single_version_has_no_switch(self):
         pages, _ = render(report())
         self.assertNotIn("data-version-link", pages["en"])

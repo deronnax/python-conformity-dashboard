@@ -43,6 +43,7 @@ button, select { font: inherit; color: inherit; cursor: pointer; }
 .switch a[aria-current="location"], .switch a[aria-current="page"] { color: #fff; background: var(--accent); }
 .version-switch { margin-block-end: .4rem; }
 .version-switch + .description { margin: 0 0 1rem; }
+.version-warning { margin: -.4rem 0 1rem; padding: .5rem .7rem; border-inline-start: 3px solid #b88700; background: #fff6d6; color: #4d3800; }
 .description { margin: .8rem 0 1.1rem; color: var(--muted); }
 .package-results, .summaries + .table-scroll { margin-top: 1rem; }
 .package-table tbody th { width: auto; }
