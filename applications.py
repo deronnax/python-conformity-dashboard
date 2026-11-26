@@ -67,7 +67,6 @@ def numpy_outcome(executable, site, wheel, invoke, directory):
         return {
             "status": "otherAbi",
             "detail": f"This interpreter loads *{suffix} extensions. The pinned wheel is {wheel.filename}.",
-            "detailFr": f"Cet interpréteur charge les extensions *{suffix}. Le wheel épinglé est {wheel.filename}.",
         }
     return None
 

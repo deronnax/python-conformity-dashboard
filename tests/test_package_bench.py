@@ -67,7 +67,7 @@ class MissingWheelTests(unittest.TestCase):
                 PACKAGE, "ERROR: No matching distribution found for lxml==6.1.3", PYPY_8, Path("/tmp/bench"))
         self.assertEqual(outcome["status"], "otherAbi")
         self.assertIn("pypy312_pp73", outcome["detail"])
-        self.assertIn("pypy312_pp80", outcome["detailFr"])
+        self.assertIn("pypy312_pp80", outcome["detail"])
 
     def test_classifies_a_release_built_for_another_python_version(self):
         package = {"project": "cryptography", "version": "50.0.2", "module": "cryptography"}
@@ -76,7 +76,7 @@ class MissingWheelTests(unittest.TestCase):
                 package, "ERROR: No matching distribution found for cryptography==50.0.2", PYPY_8, Path("/tmp/bench"))
         self.assertEqual(outcome["status"], "otherPython")
         self.assertIn("pp311", outcome["detail"])
-        self.assertIn("pp312", outcome["detailFr"])
+        self.assertIn("pp312", outcome["detail"])
 
     def test_another_abi_takes_precedence_over_another_python(self):
         files = CRYPTOGRAPHY + ["lxml-6.1.3-pp312-pypy312_pp73-manylinux_2_28_x86_64.whl"]
@@ -97,6 +97,19 @@ class MissingWheelTests(unittest.TestCase):
             outcome = package_bench.missing_wheel(
                 PACKAGE, "ERROR: No matching distribution found for lxml==6.1.3", PYPY_8, Path("/tmp/bench"))
         self.assertEqual(outcome, {"status": "noWheel", "detail": "ERROR: No matching distribution found for lxml==6.1.3"})
+
+
+class SourceFallbackTests(unittest.TestCase):
+    def test_only_the_projects_own_missing_wheel_triggers_the_fallback(self):
+        line = "ERROR: No matching distribution found for markupsafe==3.0.4"
+        self.assertTrue(package_bench.sdist_fallback({"project": "MarkupSafe"}, line))
+        self.assertFalse(package_bench.sdist_fallback({"project": "jinja2"}, line))
+
+    def test_only_the_tested_project_may_build_from_source(self):
+        arguments = package_bench.install_arguments(Path("/tmp/prefix"), "pypy", "markupsafe")
+        self.assertEqual(arguments[arguments.index("--no-binary") + 1], "markupsafe")
+        self.assertIn("--only-binary=:all:", arguments)
+        self.assertNotIn("--no-binary", package_bench.install_arguments(Path("/tmp/prefix"), "pypy"))
 
 
 RESOLUTION = """\

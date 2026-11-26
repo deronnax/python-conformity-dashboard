@@ -19,7 +19,7 @@ def run_test(test_id):
     if loader.errors:
         return "blocked", "\n".join(loader.errors)
     if suite.countTestCases() != 1:
-        return "blocked", "Expected one test.", "Un seul test était attendu."
+        return "blocked", "Expected one test."
 
     outcome = unittest.TestResult()
     suite.run(outcome)
@@ -30,7 +30,7 @@ def run_test(test_id):
     if outcome.skipped or outcome.expectedFailures:
         return "skipped", str((outcome.skipped or outcome.expectedFailures)[0][1])
     if outcome.unexpectedSuccesses or outcome.testsRun != 1:
-        return "blocked", "The test harness did not confirm execution.", "Le harnais n’a pas confirmé l’exécution du test."
+        return "blocked", "The test harness did not confirm execution."
     return "passed", ""
 
 
@@ -38,8 +38,6 @@ if __name__ == "__main__":
     sys.path.insert(0, sys.argv[1])
     log = io.StringIO()
     with contextlib.redirect_stdout(log), contextlib.redirect_stderr(log):
-        status, detail, *translations = run_test(sys.argv[2])
+        status, detail = run_test(sys.argv[2])
     outcome = {"status": status, "detail": detail or log.getvalue()}
-    if translations:
-        outcome["detailFr"] = translations[0]
     print(json.dumps(outcome))

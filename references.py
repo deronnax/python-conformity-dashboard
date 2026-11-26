@@ -58,16 +58,7 @@ FREETHREADED_NUMPY = Wheel(
 )
 
 REFERENCES = {
-    # PyPI has no NumPy 2.4.4 wheel for PyPy 3.12, and Oracle's GraalPy wheels for
-    # this ABI stop at NumPy 2.2.4.
-    "3.12": Reference("3.12.15", "c2c4321961fab0fb999d66e0cecf521c2ab3994c7992873ea99e306c1094fd5a", {
-        "cpython": Wheel(
-            PYPI + "0a/0d/0e3ecece05b7a7e87ab9fb587855548da437a061326fff64a223b6dcb78a/"
-            "numpy-2.4.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
-            "81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e",
-        ),
-        "freethreaded": FREETHREADED_NUMPY,
-    }, notes=("pypyBeta",)),
+    # Listed from the oldest version, which the version switch shows first.
     # The PyPy wheel is built for the PyPy 7.3 ABI, which PyPy 8 does not load: the
     # scenario reports it as another ABI. Oracle's GraalPy wheels for this ABI stop
     # at NumPy 1.26.4.
@@ -84,6 +75,16 @@ REFERENCES = {
         ),
         "freethreaded": FREETHREADED_NUMPY,
     }),
+    # PyPI has no NumPy 2.4.4 wheel for PyPy 3.12, and Oracle's GraalPy wheels for
+    # this ABI stop at NumPy 2.2.4.
+    "3.12": Reference("3.12.15", "c2c4321961fab0fb999d66e0cecf521c2ab3994c7992873ea99e306c1094fd5a", {
+        "cpython": Wheel(
+            PYPI + "0a/0d/0e3ecece05b7a7e87ab9fb587855548da437a061326fff64a223b6dcb78a/"
+            "numpy-2.4.4-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+            "81f4a14bee47aec54f883e0cad2d73986640c1590eb9bfaaba7ad17394481e6e",
+        ),
+        "freethreaded": FREETHREADED_NUMPY,
+    }, notes=("pypyBeta",)),
 }
 # PyPy for Python 3.12 is a beta, so the dashboard opens on Python 3.11.
 DEFAULT = "3.11"

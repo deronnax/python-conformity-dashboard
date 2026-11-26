@@ -110,11 +110,8 @@ def launch(executable, cwd, *arguments, timeout):
     )
 
 
-def result(status, detail="", *, detail_fr=None):
-    outcome = {"status": status, "detail": detail}
-    if detail_fr is not None:
-        outcome["detailFr"] = detail_fr
-    return outcome
+def result(status, detail=""):
+    return {"status": status, "detail": detail}
 
 
 def diagnostic(completed, directory):
@@ -293,23 +290,27 @@ def missing_wheel(package, line, tag, root):
             return result(
                 "otherAbi",
                 f"Wheels published for {published}. This interpreter requires {tag['abi']}.",
-                detail_fr=f"Wheels publiés pour {published}. Cet interpréteur exige {tag['abi']}.",
             )
         if versions:
             published = ", ".join(versions)
             return result(
                 "otherPython",
                 f"Wheels published for {published} only. This interpreter is {tag['interpreter']}.",
-                detail_fr=f"Wheels publiés pour {published} seulement. Cet interpréteur est {tag['interpreter']}.",
             )
     return result("noWheel", detail)
+
+
+def sdist_fallback(package, line):
+    """True when the missing wheel is the project's own, so its sdist may be tried."""
+    match = MISSING_DISTRIBUTION.search(line)
+    return bool(match) and canonical(match[1]) == canonical(package["project"])
 
 
 def site_directories(prefix):
     return [str(path) for path in sorted(prefix.glob("**/site-packages")) if path.is_dir()]
 
 
-def install_arguments(prefix, runtime):
+def install_arguments(prefix, runtime, source=None):
     # --prefix keeps the interpreter's bundled distributions visible to pip,
     # such as cffi on PyPy. --target would reinstall them from PyPI.
     arguments = [
@@ -317,17 +318,29 @@ def install_arguments(prefix, runtime):
         "install", "--only-binary=:all:", "--index-url", "https://pypi.org/simple/",
         "--timeout", "10", "--retries", "1", "--no-warn-script-location", "--prefix", str(prefix),
     ]
+    if source:
+        # Only the tested project may build from its sdist; its dependencies stay wheel-only.
+        arguments.extend(("--no-binary", source))
     if runtime == "graalpy":
         arguments.extend(("--extra-index-url", "https://gds.oracle.com/repositories/pypi/public-release/"))
     return arguments
 
 
-def install_and_import(package, runtime, executable, root, pip, tag):
+NATIVE_SUFFIXES = (".so", ".pyd", ".dylib", ".dll")
+
+
+def compiled_files(prefix):
+    return [path for path in prefix.glob("**/*") if path.suffix in NATIVE_SUFFIXES and path.is_file()]
+
+
+def install_and_import(package, runtime, executable, root, pip, tag, source=False):
+    """Install and import a package. With source=True the project itself may build from its
+    sdist, which tells a release that only lacks a wheel from one that needs a compiler."""
     project, version = package["project"], package["version"]
     with TemporaryDirectory(prefix=f"{runtime}-{project}-", dir=root) as temporary:
         working = Path(temporary)
         prefix = working / "prefix"
-        arguments = install_arguments(prefix, runtime)
+        arguments = install_arguments(prefix, runtime, project if source else None)
         try:
             installation = launch(executable, working, "-c", START_PIP, str(pip),
                                   *arguments, f"{project}=={version}", timeout=65)
@@ -342,13 +355,20 @@ def install_and_import(package, runtime, executable, root, pip, tag):
                 return dependency
             for line in reversed(installation.stderr.splitlines()):
                 if "No matching distribution found" in line:
-                    return missing_wheel(package, line, tag, root)
+                    outcome = missing_wheel(package, line, tag, root)
+                    if outcome["status"] == "noWheel" and not source and sdist_fallback(package, line):
+                        built = install_and_import(package, runtime, executable, root, pip, tag, source=True)
+                        if built["status"] != "noWheel" and built.pop("pure", False):
+                            return built
+                    return outcome
             return result("installError", diagnostic(installation, root))
 
+        if source and compiled_files(prefix):
+            # A build that needed a compiler depends on the machine, not on the interpreter.
+            return result("noWheel", "The release publishes no wheel for this interpreter and its sdist compiles native code.")
         directories = site_directories(prefix)
         if not directories:
-            return result("installError", "pip did not create a site-packages directory.",
-                          detail_fr="pip n’a pas créé de dossier site-packages.")
+            return result("installError", "pip did not create a site-packages directory.")
         try:
             imported = launch(executable, working, "-c", IMPORT_PACKAGE, os.pathsep.join(directories), project,
                               version, package["module"], SMOKE.get(project, ""), timeout=IMPORT_TIMEOUT)
@@ -363,6 +383,10 @@ def install_and_import(package, runtime, executable, root, pip, tag):
         except (IndexError, ValueError):
             return result("blocked", diagnostic(imported, root))
         outcome["detail"] = outcome["detail"].replace(str(root), "<test directory>")[:1000]
+        if source:
+            outcome["pure"] = True
+            outcome["detail"] = ("Built from the pure-Python sdist: no wheel for this interpreter. "
+                                 + outcome["detail"]).strip()
         return outcome
 
 
@@ -385,10 +409,8 @@ def pure_python(package):
 
 def native_only(package):
     if package["purePython"] is None:
-        return result("blocked", "PyPI did not list the release files.",
-                      detail_fr="PyPI n’a pas donné la liste des fichiers de la version.")
-    return result("nativeOnly", "The release publishes no pure-Python wheel.",
-                  detail_fr="La version ne publie aucun wheel purement Python.")
+        return result("blocked", "PyPI did not list the release files.")
+    return result("nativeOnly", "The release publishes no pure-Python wheel.")
 
 
 def package_results(executables, directory, ranking_path, pure_only=()):

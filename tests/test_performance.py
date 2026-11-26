@@ -60,9 +60,9 @@ class KernelTests(unittest.TestCase):
         self.assertEqual(first, [value for _, value in zip(range(5), benchmarks.lcg(7))])
         self.assertGreater(len(set(first)), 4)
 
-    def test_every_benchmark_has_two_titles(self):
-        for name, (function, title, title_fr) in benchmarks.BENCHMARKS.items():
-            self.assertTrue(callable(function) and title and title_fr, name)
+    def test_every_benchmark_has_a_title(self):
+        for name, (function, title) in benchmarks.BENCHMARKS.items():
+            self.assertTrue(callable(function) and title, name)
 
 
 class BenchmarkResultsTests(unittest.TestCase):
@@ -74,7 +74,7 @@ class BenchmarkResultsTests(unittest.TestCase):
 
     def run_measure(self, answers):
         executables = {"cpython": "cpython", "pypy": "pypy"}
-        with mock.patch.object(measure, "BENCHMARKS", {"demo": (None, "Demo", "Démo")}), \
+        with mock.patch.object(measure, "BENCHMARKS", {"demo": (None, "Demo")}), \
                 mock.patch.object(measure, "invoke", self.observe(answers)):
             return measure.benchmark_results(executables, ".")[0]["outcomes"]
 
@@ -93,7 +93,6 @@ class BenchmarkResultsTests(unittest.TestCase):
         self.assertEqual(outcomes["pypy"]["status"], "different")
         self.assertNotIn("median", outcomes["pypy"])
         self.assertIn("Expected: 42", outcomes["pypy"]["detail"])
-        self.assertIn("Attendu : 42", outcomes["pypy"]["detailFr"])
 
     def test_failures_keep_their_status(self):
         outcomes = self.run_measure({"cpython": self.finished(),

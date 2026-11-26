@@ -261,14 +261,14 @@ def word_count(words=500000):
 
 
 BENCHMARKS = {
-    "nbody": (nbody, "N-body simulation", "Simulation à N corps"),
-    "fannkuch": (fannkuch, "Fannkuch-redux permutations", "Permutations fannkuch-redux"),
-    "spectral-norm": (spectral_norm, "Spectral norm", "Norme spectrale"),
-    "nqueens": (queens, "N-queens with permutations", "N reines par permutations"),
-    "float": (float_points, "Floating-point objects", "Objets à virgule flottante"),
-    "json": (json_roundtrip, "JSON encode and decode", "Encodage et décodage JSON"),
-    "regex": (regex_search, "Regular expression search", "Recherche par expressions régulières"),
-    "word-count": (word_count, "Word frequency count", "Comptage de fréquence des mots"),
+    "nbody": (nbody, "N-body simulation"),
+    "fannkuch": (fannkuch, "Fannkuch-redux permutations"),
+    "spectral-norm": (spectral_norm, "Spectral norm"),
+    "nqueens": (queens, "N-queens with permutations"),
+    "float": (float_points, "Floating-point objects"),
+    "json": (json_roundtrip, "JSON encode and decode"),
+    "regex": (regex_search, "Regular expression search"),
+    "word-count": (word_count, "Word frequency count"),
 }
 
 
