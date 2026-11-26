@@ -95,6 +95,12 @@ code, pre { font-family: ui-monospace, Menlo, Consolas, monospace; }
 .version-note { display: block; font-size: .8rem; }
 .status { display: inline-block; padding: .18rem .45rem; border-radius: .3rem; background: #e8edf2; color: #334860; font-weight: 650; white-space: nowrap; }
 .status.passed { background: #deefe5; color: #205536; }
+/* Import-only successes prove less than a functional check, so they look lighter. */
+.status.passed.import-only { background: transparent; outline: 1px solid #9cc7ad; outline-offset: -1px; }
+.status.functionError { background: #fbe7e1; color: #832d1a; }
+.check summary, .check-note { font-size: .8rem; color: var(--muted); }
+.check-note { display: block; margin-top: .2rem; }
+.check pre { font-size: .78rem; background: #eaf1f2; padding: .4rem; border-radius: .3rem; white-space: pre-wrap; max-inline-size: 30rem; }
 .status.different, .status.error, .status.installError, .status.importError, .status.crash, .status.internalError { background: #fbe7e1; color: #832d1a; }
 .status.missing, .status.noWheel, .status.dependency { background: #fff0ca; color: #664500; }
 .status.nativeOnly { background: #eef1f3; color: #4c6070; }

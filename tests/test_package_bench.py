@@ -162,5 +162,43 @@ class PurePythonTests(unittest.TestCase):
         self.assertEqual(package_bench.native_only({"purePython": None})["status"], "blocked")
 
 
+class FunctionalCheckTests(unittest.TestCase):
+    """Run the import script on a fake installed distribution."""
+
+    def run_check(self, check):
+        import json
+        import subprocess
+        import sys
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as site:
+            Path(site, "demo").mkdir()
+            Path(site, "demo", "__init__.py").write_text("VALUE = 2\n", encoding="utf-8")
+            Path(site, "demo-1.0.dist-info").mkdir()
+            Path(site, "demo-1.0.dist-info", "METADATA").write_text(
+                "Metadata-Version: 2.1\nName: demo\nVersion: 1.0\n", encoding="utf-8")
+            completed = subprocess.run([sys.executable, "-I", "-c", package_bench.IMPORT_PACKAGE, site, "demo", "1.0",
+                                        "demo", check], capture_output=True, text=True, timeout=60)
+        return json.loads(completed.stdout.splitlines()[-1])
+
+    def test_a_package_without_a_check_is_import_only(self):
+        self.assertEqual(self.run_check(""), {"status": "passed", "detail": "", "level": "import"})
+
+    def test_a_passing_check_makes_the_package_functional(self):
+        self.assertEqual(self.run_check("import demo\nassert demo.VALUE == 2")["level"], "functional")
+
+    def test_a_failing_check_is_a_functional_error(self):
+        outcome = self.run_check("import demo\nassert demo.VALUE == 3, 'wrong value'")
+        self.assertEqual(outcome["status"], "functionError")
+        self.assertIn("AssertionError: wrong value", outcome["detail"])
+
+    def test_every_check_names_a_ranked_project(self):
+        import json
+        from smoke import SMOKE
+        from references import REFERENCES
+        for reference in REFERENCES.values():
+            projects = {item["project"] for item in json.loads(reference.ranking.read_text(encoding="utf-8"))["items"]}
+            self.assertEqual(set(SMOKE) - projects, set())
+
+
 if __name__ == "__main__":
     unittest.main()
