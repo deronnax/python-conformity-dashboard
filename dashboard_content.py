@@ -92,6 +92,25 @@ COPY = {
         "performance": "Speed relative to CPython (geometric mean)"
     },
     "applicationsTab": "Applications",
+    "suitesTab": "Test suites",
+    "suitesEmpty": "Test suites were not run for this report.",
+    "suitesMethod": ("Django's own test suite runs on each interpreter with SQLite and only the packages Django "
+                     "requires (asgiref and sqlparse, plus tblib for the parallel runner), so tests that need an "
+                     "optional package are skipped everywhere. Each interpreter is compared with CPython: the last "
+                     "column counts the tests that pass on CPython and fail on that interpreter. Below the table, "
+                     "these tests are grouped by Django app and error message, with a traceback for each group. "
+                     "Tests that fail on CPython too depend on the test machine and are listed apart."),
+    "suiteTitle": "{project} {version} · {tests} tests",
+    "suiteColumns": ["Run", "Passed", "Failed", "Errors", "Skipped", "Duration", "Fail here, pass on CPython"],
+    "suiteGroupColumns": ["App", "Outcome", "Error and example tests", "Tests"],
+    "suiteStatuses": {"completed": "Completed", "timeout": "Timed out", "crash": "Crashed",
+                      "blocked": "Did not start", "failure": "Failure", "error": "Error",
+                      "unexpectedSuccess": "Unexpected success"},
+    "suiteReference": "reference",
+    "suiteNotRun": "{count} not run",
+    "suiteDifferences": "{runtime}: {count} tests fail here and pass on CPython",
+    "suiteEnvironment": "CPython: {count} tests fail on the reference too",
+    "suiteHidden": "{groups} smaller groups, {tests} tests in all, are not shown.",
     "applicationsEmpty": "Application checks were not run for this report.",
     "applicationsPassedOn": "Scenarios passed on {runtime}",
     "scenario": "Scenario",

@@ -102,6 +102,26 @@ class GenerateTests(unittest.TestCase):
         pages, _ = render(report())
         self.assertIn('location.replace("../" + location.search + location.hash)', pages["fr"])
 
+    def test_shows_test_suites_compared_with_cpython(self):
+        import test_suites
+        base = {"suite": "django", "project": "Django", "version": "5.2.19", "duration": 75, "detail": ""}
+        data = report()
+        data["suites"] = [test_suites.summarize({
+            "cpython": {**base, "runtime": "cpython", "status": "completed", "tests": {"a.T.one": "passed"}, "tracebacks": {}},
+            "pypy": {**base, "runtime": "pypy", "status": "timeout", "detail": "killed",
+                     "tests": {"a.T.one": "error"}, "tracebacks": {"a.T.one": "TypeError: boom"}},
+        })]
+        pages, _ = render(data)
+        self.assertIn('id="suite-django"', pages["en"])
+        self.assertIn("Django 5.2.19 · 1 tests", pages["en"])
+        self.assertIn(COPY["suiteDifferences"].format(runtime="PyPy", count=1), pages["en"])
+        self.assertIn("<pre>killed</pre>", pages["en"])
+        self.assertIn("1 min 15 s", pages["en"])
+
+    def test_a_report_without_suites_says_so(self):
+        pages, _ = render(report())
+        self.assertIn(COPY["suitesEmpty"], pages["en"])
+
     def test_shows_the_code_of_each_scenario(self):
         pages, _ = render(report())
         self.assertIn(f'<summary>{COPY["scenarioCode"]}</summary><pre>def numpy_array():', pages["en"])

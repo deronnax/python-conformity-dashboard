@@ -1,9 +1,10 @@
 name: Python Conformity
 
-# A measurement takes about 25 minutes. It runs every Monday, since packages and
-# wheels change without a push, and when the workflow is run by hand (on a branch,
-# to try a change to the harness). Pushes and pull requests only run the unit
-# tests and regenerate the pages from the published results. Only main publishes.
+# A measurement runs every Monday, since packages and wheels change without a
+# push, and when the workflow is run by hand (on a branch, to try a change to the
+# harness). It takes about an hour, most of it Django's test suite on the slower
+# interpreters. Pushes and pull requests only run the unit tests and regenerate
+# the pages from the published results. Only main publishes.
 on:
   push:
     branches: [main]
@@ -24,8 +25,75 @@ env:
   MEASURE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
 
 jobs:
+  # RustPython is built once, for every job that measures it.
+  rustpython:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Build RustPython
+        run: |
+          python3 fetch.py 3.11 rustpython-source
+          cd runtimes/rustpython-source
+          rustup toolchain install 1.99.0 --profile minimal
+          cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rustpython
+          path: runtimes/rustpython-source/target/release/rustpython
+
+  # Django's test suite, one job per interpreter of each Python version. The
+  # interpreters of each version are listed in references.py.
+  suite:
+    name: Django on ${{ matrix.runtime }} (Python ${{ matrix.python }})
+    needs: rustpython
+    runs-on: ubuntu-24.04
+    timeout-minutes: 80
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { python: "3.11", runtime: cpython }
+          - { python: "3.11", runtime: pypy }
+          - { python: "3.11", runtime: graalpy }
+          - { python: "3.11", runtime: rustpython }
+          - { python: "3.11", runtime: freethreaded }
+          - { python: "3.12", runtime: cpython }
+          - { python: "3.12", runtime: pypy }
+          - { python: "3.12", runtime: graalpy }
+          - { python: "3.12", runtime: rustpython }
+          - { python: "3.13", runtime: cpython }
+          - { python: "3.13", runtime: graalpy }
+          - { python: "3.13", runtime: rustpython }
+          - { python: "3.14", runtime: cpython }
+          - { python: "3.14", runtime: rustpython }
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - if: matrix.runtime == 'rustpython'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rustpython
+          path: runtimes/rustpython/
+      - name: Download the interpreter
+        run: |
+          if [ ${{ matrix.runtime }} = rustpython ]; then chmod +x runtimes/rustpython/rustpython
+          else python3 fetch.py ${{ matrix.python }} ${{ matrix.runtime }}; fi
+      - name: Run Django's test suite
+        run: python3 -B test_suites.py --version ${{ matrix.python }} --runtime ${{ matrix.runtime }} --output suite.json
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: suite-${{ matrix.python }}-${{ matrix.runtime }}
+          path: suite.json
+
   dashboard:
     name: Python ${{ matrix.python }}
+    needs: rustpython
+    # Pushes and pull requests skip the RustPython build.
+    if: ${{ !cancelled() && needs.rustpython.result != 'failure' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -33,36 +101,10 @@ jobs:
       matrix:
         include:
           # The default version is the site root. PyPy for Python 3.12 is a beta.
-          - python: "3.11"
-            folder: ""
-            cpython: 3.11.17
-            cpython-sha256: 7cc8d9dce9ea23c31267e7f244005c8979da04794b7737a3a30e62b03abeb120
-            pypy: https://downloads.python.org/pypy/pypy3.11-v8.0.1-linux64.tar.gz
-            pypy-sha256: 706965bcf372752ba69dafd59d860e51bc2fadbb0f8a47cec3426125d7058ceb
-            # GraalPy 24.2 is the last release that implements Python 3.11.
-            graalpy: https://github.com/oracle/graalpython/releases/download/graal-24.2.2/graalpy-community-24.2.2-linux-amd64.tar.gz
-            graalpy-sha256: 384642677b76c26d6be1cf6bce2bc94d49df53845dd506414d95e2322bc9ac5d
-            # The free-threaded build implements Python 3.14: it is measured once.
-            freethreaded: true
-          - python: "3.12"
-            folder: 3.12/
-            cpython: 3.12.15
-            cpython-sha256: 5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124
-            pypy: https://downloads.python.org/pypy/pypy3.12-v8.0.1-linux64.tar.gz
-            pypy-sha256: aeed27797777296d9c94e53bdfa608804696dbd4ff9f2213003cce064ee46ef8
-            graalpy: https://github.com/oracle/graalpython/releases/download/graal-25.2.4/graalpy3.12-community-25.2.4-linux-amd64.tar.gz
-            graalpy-sha256: 98af303a6b714bde39077354733254f78023ddef06d61e14cb66a3a01f10ae82
-          # PyPy has no release for Python 3.13 or 3.14, nor GraalPy for 3.14.
-          - python: "3.13"
-            folder: 3.13/
-            cpython: 3.13.17
-            cpython-sha256: cbda6f7767884fc456860b11fd184391a9320cae00a86c0f49a1c7ac6e236f7a
-            graalpy: https://github.com/oracle/graalpython/releases/download/graal-25.6.5/graalpy3.13-community-25.6.5-linux-amd64.tar.gz
-            graalpy-sha256: 9c9d68730d4e6de5f5e96acddab6f0625b6534026a128ee72a1d5cfe59621520
-          - python: "3.14"
-            folder: 3.14/
-            cpython: 3.14.9
-            cpython-sha256: dfa4c5a40c47f338f41658017be550c72247c391e6bfb1fa4da03ebc8451abdf
+          - { python: "3.11", folder: "" }
+          - { python: "3.12", folder: 3.12/ }
+          - { python: "3.13", folder: 3.13/ }
+          - { python: "3.14", folder: 3.14/ }
     env:
       PYTHON: runtimes/cpython/bin/python${{ matrix.python }}
       # The published dashboard of this version.
@@ -72,46 +114,28 @@ jobs:
         with:
           persist-credentials: false
 
-      # Regenerating the pages needs only CPython. A measurement also needs the
-      # interpreters this version lists.
+      # Regenerating the pages needs only CPython.
       - name: Download the interpreters
         run: |
-          fetch() {  # sha256, url, folder
-            curl -fsSL "$2" -o archive.tar.gz
-            echo "$1  archive.tar.gz" | sha256sum --check
-            mkdir -p "runtimes/$3" && tar -xzf archive.tar.gz --strip-components=1 -C "runtimes/$3"
-          }
-          fetch ${{ matrix.cpython-sha256 }} https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${{ matrix.cpython }}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz cpython
-          if $MEASURE; then
-            fetch bf290cf7a70f813758819d895868b2b49b9edea1f10de3524df2cae1f2d58a4d https://github.com/RustPython/RustPython/archive/refs/tags/0.6.0.tar.gz rustpython
-            if [ "${{ matrix.pypy }}" ]; then fetch ${{ matrix.pypy-sha256 }} ${{ matrix.pypy }} pypy; fi
-            if [ "${{ matrix.graalpy }}" ]; then fetch ${{ matrix.graalpy-sha256 }} ${{ matrix.graalpy }} graalpy; fi
-            if [ "${{ matrix.freethreaded }}" ]; then
-              fetch 298aff66cb6e46777dae42441e3bf559c708fbf5e001afc4d3e93b0d245c021d https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-3.14.9%2B20261021-x86_64-unknown-linux-gnu-freethreaded-install_only.tar.gz freethreaded
-            fi
-          fi
+          if $MEASURE; then python3 fetch.py ${{ matrix.python }}
+          else python3 fetch.py ${{ matrix.python }} cpython; fi
+      - if: env.MEASURE == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rustpython
+          path: runtimes/rustpython/
 
       - name: Run the unit tests
         run: $PYTHON -B -m unittest discover -s tests
-
-      - name: Compile RustPython
-        if: env.MEASURE == 'true'
-        working-directory: runtimes/rustpython
-        run: |
-          rustup toolchain install 1.99.0 --profile minimal
-          cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
 
       # GitHub Pages replaces the whole site on each deployment, so the published
       # history is downloaded, extended by this run and published again.
       - name: Measure
         if: env.MEASURE == 'true'
         run: |
+          chmod +x runtimes/rustpython/rustpython
           curl -fsSL "${PUBLISHED}history.json" -o history.json || echo "No published history yet."
-          interpreters=(--rustpython runtimes/rustpython/target/release/rustpython)
-          if [ -d runtimes/pypy ]; then interpreters+=(--pypy runtimes/pypy/bin/pypy${{ matrix.python }}); fi
-          if [ -d runtimes/graalpy ]; then interpreters+=(--graalpy runtimes/graalpy/bin/graalpy); fi
-          if [ -d runtimes/freethreaded ]; then interpreters+=(--freethreaded runtimes/freethreaded/bin/python3.14t); fi
-          $PYTHON -B measure.py --reference ${{ matrix.python }} --history history.json "${interpreters[@]}" \
+          $PYTHON -B measure.py --reference ${{ matrix.python }} --history history.json --runtimes runtimes \
             --benchmarks --applications --packages | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Regenerate the pages from the published results
@@ -127,19 +151,39 @@ jobs:
           path: dist/
 
   assemble:
-    needs: dashboard
+    needs: [dashboard, suite]
+    # A suite job that failed leaves its interpreter out of the comparison.
+    if: ${{ !cancelled() && needs.dashboard.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: dashboard-*
           path: parts/
+      - if: env.MEASURE == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: suite-*
+          path: parts/
 
-      # The default version is the site root, the others are served from a folder.
+      # The default version, 3.11, is the site root; the others are served from a
+      # folder. A measurement adds the test suites to each version's results.
       - name: Put each version in its folder
         run: |
-          mv parts/dashboard-3.11 site
-          for part in parts/dashboard-*; do mv "$part" "site/${part#parts/dashboard-}"; done
+          for part in parts/dashboard-*; do
+            version=${part#parts/dashboard-}
+            folder=site/$version
+            if [ $version = 3.11 ]; then folder=site; fi
+            if $MEASURE; then
+              python3 -B dashboard.py $part/results.json --history $part/history.json --version $version \
+                --suites parts --output $folder
+            else
+              mv $part $folder  # 3.11 comes first and creates site/
+            fi
+          done
 
       # Python 3.11 used to be served under /3.11/, with a French page under fr/.
       - name: Redirect the former addresses

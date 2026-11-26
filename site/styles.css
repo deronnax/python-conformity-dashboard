@@ -165,3 +165,6 @@ tr:hover .permalink, .permalink:focus-visible { opacity: 1; }
 tr:target > * { background: #fff6d6; }
 .copy-button { display: block; margin: .35rem 0 .2rem; padding: .15rem .5rem; font-size: .78rem; border: 1px solid #a8bac4; border-radius: .3rem; background: var(--paper); }
 .copy-button:hover { background: #e5eeee; }
+.suite-groups { margin-block: 1rem; }
+.suite-groups > summary { cursor: pointer; font-weight: 600; }
+.suite-examples { margin: .3rem 0 0; padding-inline-start: 1.1rem; font-size: .85rem; }

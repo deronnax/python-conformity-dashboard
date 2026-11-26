@@ -15,12 +15,13 @@ from urllib.parse import quote
 from dashboard_content import COPY
 from history import dump as dump_history, load as load_history, merge, snapshot
 from performance import geometric_means, speedup
+import test_suites
 from references import REFERENCES, site_layout
 
 
 ROOT = Path(__file__).resolve().parent
 ASSETS = ROOT / "site"
-VIEWS = {"packages": "pypi-packages", "applications": "applications", "common": "shared-cases",
+VIEWS = {"packages": "pypi-packages", "applications": "applications", "suites": "test-suites", "common": "shared-cases",
          "upstream": "cpython-tests", "interpreters": "interpreters", "performance": "performance",
          "history": "history"}
 OBSERVED_VALUE = re.compile(r"([A-Za-z_]\w*): (.*)")
@@ -292,6 +293,83 @@ def render_applications(report, copy):
             <tbody>{"".join(listing)}</tbody>
           </table>
         </div>
+      </section>"""
+
+
+def minutes(seconds):
+    return f"{seconds // 60} min {seconds % 60:02d} s" if seconds >= 60 else f"{seconds} s"
+
+
+def suite_groups(outcome, summary, copy):
+    """The tests of one interpreter grouped by Django app and error message."""
+    rows = []
+    for item in outcome.get("groups", []):
+        examples = "".join(f"<li><code>{escape(test)}</code></li>" for test in item["examples"])
+        rows.append(
+            f'<tr><td><code>{escape(item["app"])}</code></td><td>{escape(copy["suiteStatuses"][item["status"]])}</td>'
+            f'<td><details class="package-detail"><summary>{escape(item["message"] or item["status"])}</summary>'
+            f'<pre>{escape(item["traceback"])}</pre></details><ul class="suite-examples">{examples}</ul></td>'
+            f'<td class="number">{item["count"]}</td></tr>')
+    if not rows:
+        return ""
+    hidden = ""
+    if outcome.get("hiddenGroups"):
+        hidden = f'<p class="description">{escape(copy["suiteHidden"].format(groups=outcome["hiddenGroups"], tests=outcome["hiddenTests"]))}</p>'
+    return (f'<details class="suite-groups"><summary>{escape(summary)}</summary>'
+            f'<div class="table-scroll"><table class="result-table"><thead><tr>'
+            + "".join(f'<th scope="col">{escape(label)}</th>' for label in copy["suiteGroupColumns"])
+            + f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>{hidden}</details>')
+
+
+def render_suites(report, copy):
+    heading = f'<h2>{escape(copy["suitesTab"])}</h2>'
+    suites = report.get("suites") or []
+    if not suites:
+        return (f'<section id="{VIEWS["suites"]}" data-dashboard-panel>'
+                f'{heading}<p class="description">{escape(copy["suitesEmpty"])}</p></section>')
+    parts = []
+    for suite in suites:
+        runtimes = [runtime for runtime in report["runtimes"] if runtime["id"] in suite["outcomes"]]
+        rows, details = [], []
+        for runtime in runtimes:
+            outcome = suite["outcomes"][runtime["id"]]
+            counts = outcome["counts"]
+            failed = counts.get("failure", 0) + counts.get("unexpectedSuccess", 0)
+            status = escape(copy["suiteStatuses"][outcome["status"]])
+            if outcome.get("detail"):
+                status = f'<details class="package-detail"><summary>{status}</summary><pre>{escape(outcome["detail"])}</pre></details>'
+            if outcome.get("note"):
+                status += f'<span class="version-note">{escape(outcome["note"])}</span>'
+            if runtime["id"] == "cpython":
+                difference = escape(copy["suiteReference"])
+                failing = failed + counts.get("error", 0)
+                if failing:
+                    details.append(suite_groups(outcome, copy["suiteEnvironment"].format(count=failing), copy))
+            elif "differences" in outcome and counts:
+                difference = f'<strong>{outcome["differences"]}</strong>'
+                if outcome["notRun"]:
+                    difference += f' <span class="version-note">{escape(copy["suiteNotRun"].format(count=outcome["notRun"]))}</span>'
+                if outcome["differences"]:
+                    details.append(suite_groups(outcome, copy["suiteDifferences"].format(
+                        count=outcome["differences"], runtime=runtime["name"]), copy))
+            else:
+                difference = ""
+            cells = [status, counts.get("passed", 0), failed, counts.get("error", 0), counts.get("skipped", 0),
+                     escape(minutes(outcome["duration"])), difference]
+            rows.append(f'<tr><th scope="row">{escape(runtime["name"])}</th>'
+                        + "".join(f'<td>{cell}</td>' for cell in cells) + "</tr>")
+        fragment = anchor("suite", suite["id"])
+        title = copy["suiteTitle"].format(project=suite["project"], version=suite["version"], tests=suite["tests"])
+        parts.append(
+            f'<h3 id="{escape(fragment)}">{permalink(fragment, copy)}{escape(title)}</h3>'
+            f'<div class="table-scroll" role="region" aria-label="{escape(title)}" tabindex="0"><table class="result-table">'
+            f'<thead><tr><th scope="col">{escape(copy["interpreter"])}</th>'
+            + "".join(f'<th scope="col">{escape(label)}</th>' for label in copy["suiteColumns"])
+            + f'</tr></thead><tbody>{"".join(rows)}</tbody></table></div>' + "".join(details))
+    return f"""<section id="{VIEWS["suites"]}" data-dashboard-panel>
+        {heading}
+        <p class="description">{escape(copy["suitesMethod"])}</p>
+        {"".join(parts)}
       </section>"""
 
 
@@ -700,6 +778,7 @@ def render_page(report, template, assets, history, site=None):
         referenceVersion=escape(report["reference"]),
         packages=render_packages(report, COPY),
         applications=render_applications(report, COPY),
+        suites=render_suites(report, COPY),
         interpreters=render_interpreters(report, COPY),
         performance=render_benchmarks(report, COPY),
         history=render_history(history, COPY),
@@ -738,12 +817,17 @@ def main():
     parser.add_argument("report", type=Path)
     parser.add_argument("--output", type=Path, default=ROOT / "dist")
     parser.add_argument("--history", type=Path, help="history.json from an earlier run, extended with this report")
+    parser.add_argument("--suites", type=Path,
+                        help="Directory of suite-<version>-<runtime>/suite.json runs, added to the report")
     parser.add_argument("--version", choices=REFERENCES,
                         help="Python version of the report, to link the dashboards of the other versions")
     arguments = parser.parse_args()
     previous = load_history(arguments.history) if arguments.history else []
     site = site_layout(REFERENCES[arguments.version]) if arguments.version else None
-    generate(json.loads(arguments.report.read_text(encoding="utf-8")), arguments.output, previous, site=site)
+    report = json.loads(arguments.report.read_text(encoding="utf-8"))
+    if arguments.suites:
+        report["suites"] = test_suites.load(arguments.suites, report["reference"].rpartition(".")[0])
+    generate(report, arguments.output, previous, site=site)
 
 
 if __name__ == "__main__":

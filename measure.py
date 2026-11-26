@@ -23,6 +23,7 @@ from dashboard import generate
 from history import load as load_history
 from package_bench import package_results
 from performance import summarize
+from fetch import executable
 from references import DEFAULT, REFERENCES, site_layout
 
 
@@ -309,6 +310,9 @@ def main():
     parser.add_argument("--graalpy", help="Standalone GraalPy binary. Added to the shared cases when given.")
     parser.add_argument("--rustpython", help="RustPython binary. Tested on packages with a pure-Python wheel only.")
     parser.add_argument("--freethreaded", help="Free-threaded CPython 3.14 binary. Added to every view but the packages when given.")
+    parser.add_argument("--runtimes", type=Path,
+                        help="Measure every interpreter fetch.py downloaded into this directory, "
+                             "in addition to the binaries given above")
     parser.add_argument("--history", type=Path, action="append", default=[],
                         help="history.json from an earlier run, extended by this one. Repeatable: only "
                              "entries measured against the same Python version are kept")
@@ -323,6 +327,9 @@ def main():
     try:
         executables = {}
         for runtime in RUNTIME_NAMES:
+            downloaded = executable(runtime, reference.minor, args.runtimes) if args.runtimes else None
+            if runtime != "cpython" and not getattr(args, runtime) and downloaded and downloaded.exists():
+                setattr(args, runtime, str(downloaded))
             command = getattr(args, runtime)
             if command:
                 path = shutil.which(command)
