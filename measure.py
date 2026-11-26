@@ -23,7 +23,7 @@ from dashboard import generate
 from history import load as load_history
 from package_bench import package_results
 from performance import summarize
-from references import DEFAULT, REFERENCES
+from references import DEFAULT, REFERENCES, site_layout
 
 
 ROOT = Path(__file__).resolve().parent
@@ -297,12 +297,6 @@ def upstream_results(executables, tests, cwd, reference=REFERENCES[DEFAULT]):
             rows.append({"id": method, "module": module, "title": method.split(".")[-1],
                          "source": source_url(method, tests.parent, reference), "sourceTest": method, "outcomes": outcomes})
     return rows
-
-
-def site_layout(reference):
-    """Where each version's dashboard lives: the default version at the root, the others in a folder."""
-    return {"current": reference.minor,
-            "versions": [(minor, "" if minor == DEFAULT else f"{minor}/") for minor in REFERENCES]}
 
 
 def main():

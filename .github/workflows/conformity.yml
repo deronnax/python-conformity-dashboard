@@ -1,13 +1,15 @@
 name: Python Conformity
 
+# A measurement takes about 25 minutes. It runs every Monday, since package
+# releases and wheels change without a push, and on demand: run the workflow by
+# hand on a branch to measure a change to the harness. Pushes and pull requests
+# only run the unit tests and regenerate the pages from the published results.
+# Only a run on main publishes the site.
 on:
   push:
     branches: [main]
-  # Pull requests are measured too. Only a run on main publishes the site.
   pull_request:
     branches: [main]
-  # Package releases and wheels change without a push, so the dashboard is
-  # measured again every Monday.
   schedule:
     - cron: "23 5 * * 1"
   workflow_dispatch:
@@ -17,7 +19,7 @@ permissions:
 
 jobs:
   measure:
-    name: measure (Python ${{ matrix.python }})
+    name: ${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && 'measure' || 'render' }} (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     strategy:
@@ -47,6 +49,7 @@ jobs:
     env:
       PYTHON_VERSION: ${{ matrix.python }}
       CPYTHON_RELEASE: ${{ matrix.cpython }}
+      MEASURE: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -79,6 +82,8 @@ jobs:
 
           extract "$CPYTHON_SHA256" \
             "https://github.com/astral-sh/python-build-standalone/releases/download/20261021/cpython-${CPYTHON_RELEASE}%2B20261021-x86_64-unknown-linux-gnu-install_only.tar.gz" cpython
+          # Regenerating the pages needs only CPython.
+          [ "$MEASURE" = true ] || exit 0
           extract "$PYPY_SHA256" "$PYPY_URL" pypy
           extract "$GRAALPY_SHA256" "$GRAALPY_URL" graalpy
           if [ "$FREETHREADED" = true ]; then
@@ -95,6 +100,7 @@ jobs:
           "$RUNNER_TEMP/conformity/cpython/bin/python$PYTHON_VERSION" -B -m unittest discover -s tests
 
       - name: Compile RustPython
+        if: ${{ env.MEASURE == 'true' }}
         shell: bash
         working-directory: ${{ runner.temp }}/conformity/rustpython-src
         run: |
@@ -102,7 +108,25 @@ jobs:
           rustup toolchain install 1.99.0 --profile minimal
           cargo +1.99.0 build --release --locked --features freeze-stdlib,sqlite --bin rustpython
 
+      - name: Regenerate the dashboard from the published results
+        if: ${{ env.MEASURE != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          folder=$("$RUNNER_TEMP/conformity/cpython/bin/python$PYTHON_VERSION" -B -c \
+            "import sys; from references import REFERENCES, site_layout; print(dict(site_layout(REFERENCES[sys.argv[1]])['versions'])[sys.argv[1]])" \
+            "$PYTHON_VERSION")
+          published="$RUNNER_TEMP/published"
+          mkdir -p "$published"
+          curl -fsSL --retry 3 --max-time 60 "$site/${folder}results.json" -o "$published/results.json"
+          curl -fsSL --retry 3 --max-time 60 "$site/${folder}history.json" -o "$published/history.json"
+          # The history is unchanged: it already holds the entry of this report.
+          "$RUNNER_TEMP/conformity/cpython/bin/python$PYTHON_VERSION" -B dashboard.py "$published/results.json" \
+            --history "$published/history.json" --version "$PYTHON_VERSION" --output dist
+
       - name: Measure and generate the dashboard
+        if: ${{ env.MEASURE == 'true' }}
         shell: bash
         env:
           FREETHREADED: ${{ matrix.freethreaded }}

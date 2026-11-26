@@ -88,3 +88,9 @@ REFERENCES = {
 }
 # PyPy for Python 3.12 is a beta, so the dashboard opens on Python 3.11.
 DEFAULT = "3.11"
+
+
+def site_layout(reference):
+    """Where each version's dashboard lives: the default version at the root, the others in a folder."""
+    return {"current": reference.minor,
+            "versions": [(minor, "" if minor == DEFAULT else f"{minor}/") for minor in REFERENCES]}
