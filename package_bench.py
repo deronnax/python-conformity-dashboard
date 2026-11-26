@@ -13,6 +13,7 @@ from urllib.request import urlopen
 from zipfile import BadZipFile
 
 from applications import PYPI, Wheel, prepare
+from smoke import SMOKE
 
 
 ROOT = Path(__file__).resolve().parent
@@ -49,8 +50,9 @@ import json
 import os
 import site
 import sys
+import traceback
 
-directories, project, version, name = sys.argv[1:]
+directories, project, version, name, check = sys.argv[1:]
 installed_directories = []
 for directory in reversed(directories.split(os.pathsep)):
     sys.path.insert(0, directory)
@@ -68,7 +70,13 @@ try:
 except Exception as exc:
     outcome = {"status": "importError", "detail": f"{type(exc).__name__}: {exc}"}
 else:
-    outcome = {"status": "passed", "detail": ""}
+    outcome = {"status": "passed", "detail": "", "level": "functional" if check else "import"}
+    if check:
+        try:
+            exec(compile(check, "<functional check>", "exec"), {"__name__": "__check__"})
+        except Exception:
+            lines = traceback.format_exc().strip().splitlines()
+            outcome = {"status": "functionError", "detail": "\\n".join(lines[-6:]), "level": "functional"}
 print(json.dumps(outcome))
 """
 
@@ -343,7 +351,7 @@ def install_and_import(package, runtime, executable, root, pip, tag):
                           detail_fr="pip n’a pas créé de dossier site-packages.")
         try:
             imported = launch(executable, working, "-c", IMPORT_PACKAGE, os.pathsep.join(directories), project,
-                              version, package["module"], timeout=IMPORT_TIMEOUT)
+                              version, package["module"], SMOKE.get(project, ""), timeout=IMPORT_TIMEOUT)
         except subprocess.TimeoutExpired:
             return result("timeout")
         except OSError:
@@ -402,6 +410,8 @@ def package_results(executables, directory, ranking_path, pure_only=()):
         sys.path.append(str(pip))
     for package in ranking["items"]:
         package["purePython"] = pure_python(package)
+        if package["project"] in SMOKE:
+            package["check"] = SMOKE[package["project"]].strip()
     active = {}
     unavailable = {}
     tags = {}

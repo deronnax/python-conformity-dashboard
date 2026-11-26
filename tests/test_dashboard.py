@@ -248,6 +248,32 @@ class DeepLinkTests(unittest.TestCase):
         self.assertIn(TRANSLATIONS["fr"]["copyReproduction"], pages["fr"])
 
 
+class FunctionalCheckViewTests(unittest.TestCase):
+    def test_import_only_and_functional_successes_differ(self):
+        data = report()
+        item = data["packages"]["items"][0]
+        item["check"] = "import lxml.etree\nassert lxml.etree.fromstring('<a/>').tag == 'a'"
+        item["outcomes"]["cpython"] = {"status": "passed", "detail": "", "level": "functional"}
+        item["outcomes"]["pypy"] = {"status": "passed", "detail": "", "level": "import"}
+        pages, _ = render(data)
+        for language in ("en", "fr"):
+            copy = TRANSLATIONS[language]
+            page = pages[language]
+            self.assertIn(f'<span class="status passed import-only">{escape(copy["importOnly"])}</span>', page)
+            self.assertIn(escape(copy["checkTitle"]), page)
+            self.assertIn(escape(copy["checkLevels"].format(functional=1, imported=0)), page)
+            self.assertIn(escape(copy["checkLevels"].format(functional=0, imported=1)), page)
+
+    def test_a_failed_check_is_shown_with_its_traceback(self):
+        data = report()
+        data["packages"]["items"][0]["outcomes"]["pypy"] = {
+            "status": "functionError", "detail": "AssertionError: wrong tag", "level": "functional"}
+        pages, _ = render(data)
+        self.assertIn(TRANSLATIONS["en"]["statuses"]["functionError"], pages["en"])
+        self.assertIn("AssertionError: wrong tag", pages["en"])
+        self.assertIn(escape(TRANSLATIONS["en"]["noCheck"]), pages["en"])
+
+
 class InterpreterTests(unittest.TestCase):
     def test_shows_thread_scaling_and_failed_measurements(self):
         pages, _ = render(report())

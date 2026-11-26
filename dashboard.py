@@ -113,7 +113,7 @@ def detailed_badge(outcome, language, copy):
     return label
 
 
-def render_summaries(rows, runtimes, copy, label_key="passedOn", reference=None):
+def render_summaries(rows, runtimes, copy, label_key="passedOn", reference=None, extra=None):
     cards = []
     for runtime in runtimes:
         counts = Counter(row["outcomes"][runtime["id"]]["status"] for row in rows)
@@ -127,6 +127,8 @@ def render_summaries(rows, runtimes, copy, label_key="passedOn", reference=None)
             for status, (singular, plural) in copy["totals"].items() if counts[status]
         )
         detail = f'<p class="summary-detail">{escape(breakdown)}</p>' if breakdown else ""
+        if extra and extra.get(runtime["id"]):
+            detail = f'<p class="summary-detail">{escape(extra[runtime["id"]])}</p>' + detail
         if reference and cross_version(runtime, reference):
             note = copy["crossVersionCard"].format(version=language_version(runtime), reference=reference)
             detail = f'<p class="summary-detail cross-version">{escape(note)}</p>' + detail
@@ -305,11 +307,32 @@ def blocker_text(blocker, copy):
 
 def package_cell(outcome, language, copy):
     blocker = outcome.get("blocker")
+    if outcome["status"] == "passed" and outcome.get("level") == "import":
+        return f'<span class="status passed import-only">{escape(copy["importOnly"])}</span>'
     if not blocker:
         return detailed_badge(outcome, language, copy)
     detail = blocker_text(blocker, copy) + "\n\n" + outcome_detail(outcome, language)
     return (f'<details class="package-detail"><summary>{badge(outcome, copy)}</summary><pre>{escape(detail.strip())}</pre>'
             f'</details><span class="blocker">{escape(copy["blockerVia"])} <code>{escape(blocker["name"])}</code></span>')
+
+
+def check_details(row, copy):
+    """The functional check a package runs after its import, when it has one."""
+    if not row.get("check"):
+        return f'<span class="check-note">{escape(copy["noCheck"])}</span>'
+    return (f'<details class="check"><summary>{escape(copy["checkTitle"])}</summary>'
+            f'<pre>{escape(row["check"])}</pre></details>')
+
+
+def check_levels(rows, runtimes, copy):
+    """Per interpreter, how many passing packages also passed a functional check."""
+    lines = {}
+    for runtime in runtimes:
+        levels = Counter(row["outcomes"][runtime["id"]].get("level") for row in rows
+                         if row["outcomes"][runtime["id"]]["status"] == "passed")
+        if levels["functional"] or levels["import"]:
+            lines[runtime["id"]] = copy["checkLevels"].format(functional=levels["functional"], imported=levels["import"])
+    return lines
 
 
 def render_blockers(rows, runtimes, copy):
@@ -359,7 +382,7 @@ def render_packages(report, language, copy):
         cells = [
             f'<td class="column-rank">{number}</td>',
             f'<th scope="row">{permalink(fragment, copy)}<a href="{escape(url)}">{escape(project)}</a> {escape(version)}'
-            f'<code class="package-module">{escape(module)}</code>{copy_button(command, copy)}</th>',
+            f'<code class="package-module">{escape(module)}</code>{check_details(row, copy)}{copy_button(command, copy)}</th>',
             f'<td class="column-downloads">{escape(downloads)}</td>',
         ]
         cells.extend(f'<td>{package_cell(row["outcomes"][runtime["id"]], language, copy)}</td>' for runtime in runtimes)
@@ -376,7 +399,7 @@ def render_packages(report, language, copy):
         <p class="description">{escape(copy["packagesMethod"])}</p>
         {performance_only_note(report, copy)}
         <div class="summaries" aria-label="{escape(copy["summaries"])}">
-          {render_summaries(rows, runtimes, copy, "packagesPassedOn", report["reference"])}
+          {render_summaries(rows, runtimes, copy, "packagesPassedOn", report["reference"], check_levels(rows, runtimes, copy))}
         </div>
         {render_blockers(rows, runtimes, copy)}
         <div class="table-scroll package-results" role="region" aria-label="{escape(copy["packagesTitle"])}" tabindex="0">
