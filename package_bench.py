@@ -73,8 +73,9 @@ try:
             raise ImportError(f"{name} resolved outside the package directory")
         shipped = getattr(module, "__version__", "")
         bundled = f"The interpreter ships its own {name} {shipped}: this release installs only its metadata."
-except Exception as exc:
-    outcome = {"status": "importError", "detail": f"{type(exc).__name__}: {exc}"}
+except Exception:
+    lines = traceback.format_exc().strip().splitlines()
+    outcome = {"status": "importError", "detail": "\\n".join(lines[-15:])}
 else:
     outcome = {"status": "passed", "detail": bundled.replace("  ", " "), "level": "functional" if check else "import"}
     if check:
@@ -82,7 +83,7 @@ else:
             exec(compile(check, "<functional check>", "exec"), {"__name__": "__check__"})
         except Exception:
             lines = traceback.format_exc().strip().splitlines()
-            outcome = {"status": "functionError", "detail": "\\n".join(lines[-6:]), "level": "functional"}
+            outcome = {"status": "functionError", "detail": "\\n".join(lines[-15:]), "level": "functional"}
 print(json.dumps(outcome))
 """
 

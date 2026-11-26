@@ -291,6 +291,23 @@ class FunctionalCheckTests(unittest.TestCase):
         self.assertEqual(outcome["status"], "functionError")
         self.assertIn("AssertionError: wrong value", outcome["detail"])
 
+    def test_an_import_error_keeps_its_traceback(self):
+        import json
+        import subprocess
+        import sys
+        with TemporaryDirectory() as site:
+            Path(site, "demo").mkdir()
+            Path(site, "demo", "__init__.py").write_text("raise RuntimeError('broken on import')\n", encoding="utf-8")
+            Path(site, "demo-1.0.dist-info").mkdir()
+            Path(site, "demo-1.0.dist-info", "METADATA").write_text(
+                "Metadata-Version: 2.1\nName: demo\nVersion: 1.0\n", encoding="utf-8")
+            completed = subprocess.run([sys.executable, "-I", "-c", package_bench.IMPORT_PACKAGE, site, "demo", "1.0",
+                                        "demo", ""], capture_output=True, text=True, timeout=60)
+        outcome = json.loads(completed.stdout.splitlines()[-1])
+        self.assertEqual(outcome["status"], "importError")
+        self.assertIn("Traceback (most recent call last)", outcome["detail"])
+        self.assertIn("RuntimeError: broken on import", outcome["detail"])
+
     def test_every_check_names_a_ranked_project(self):
         import json
         from smoke import SMOKE
