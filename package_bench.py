@@ -65,12 +65,18 @@ try:
     module = import_module(name)
     filename = getattr(module, "__file__", None)
     paths = [filename] if filename else getattr(module, "__path__", ())
+    bundled = ""
     if not any(Path(path).resolve().is_relative_to(installed) for path in paths for installed in installed_directories):
-        raise ImportError(f"{name} resolved outside the package directory")
+        # PyPy ships its own cffi: on PyPy, the PyPI release installs only its metadata.
+        top = name.split(".")[0]
+        if any(file.parts[0] in (top, top + ".py") for file in metadata.files(project) or ()):
+            raise ImportError(f"{name} resolved outside the package directory")
+        shipped = getattr(module, "__version__", "")
+        bundled = f"The interpreter ships its own {name} {shipped}: this release installs only its metadata."
 except Exception as exc:
     outcome = {"status": "importError", "detail": f"{type(exc).__name__}: {exc}"}
 else:
-    outcome = {"status": "passed", "detail": "", "level": "functional" if check else "import"}
+    outcome = {"status": "passed", "detail": bundled.replace("  ", " "), "level": "functional" if check else "import"}
     if check:
         try:
             exec(compile(check, "<functional check>", "exec"), {"__name__": "__check__"})
@@ -90,7 +96,7 @@ CONFLICT = re.compile(r"^\s+(\S+) \S+ depends on ([^;]+?)\s*(?:;.*)?$", re.MULTI
 PLATFORM = re.compile(r"^(manylinux|musllinux|macosx|linux|win)(?:\d+|_\d+_\d+)?_(.+)$")
 
 
-def launch(executable, cwd, *arguments, timeout):
+def launch(executable, cwd, *arguments, timeout, extra_environment=None):
     inherited = ("PATH", "LANG", "LC_ALL", "SSL_CERT_FILE", "SSL_CERT_DIR")
     environment = {key: os.environ[key] for key in inherited if key in os.environ}
     environment.update({
@@ -98,6 +104,7 @@ def launch(executable, cwd, *arguments, timeout):
         "XDG_CACHE_HOME": str(cwd / "cache"),
         "MPLCONFIGDIR": str(cwd / "matplotlib"),
         "OPENBLAS_NUM_THREADS": "1",
+        **(extra_environment or {}),
     })
     return subprocess.run(
         [executable, "-I", "-S", "-B", *arguments],
@@ -300,17 +307,27 @@ def missing_wheel(package, line, tag, root):
     return result("noWheel", detail)
 
 
-def sdist_fallback(package, line):
-    """True when the missing wheel is the project's own, so its sdist may be tried."""
-    match = MISSING_DISTRIBUTION.search(line)
-    return bool(match) and canonical(match[1]) == canonical(package["project"])
+def install_failure(package, installation, tag, root):
+    """Classify a failed installation. Also name the distribution that has no wheel at all,
+    the project or a dependency, whose sdist may be tried."""
+    output = installation.stderr + installation.stdout
+    dependency = blocked_by(package, output, tag, root)
+    if dependency:
+        blocker = dependency["blocker"]
+        return dependency, blocker["name"] if blocker.get("cause") == "noWheel" else None
+    for line in reversed(installation.stderr.splitlines()):
+        if "No matching distribution found" in line:
+            outcome = missing_wheel(package, line, tag, root)
+            match = MISSING_DISTRIBUTION.search(line)
+            return outcome, match[1] if match and outcome["status"] == "noWheel" else None
+    return result("installError", diagnostic(installation, root)), None
 
 
 def site_directories(prefix):
     return [str(path) for path in sorted(prefix.glob("**/site-packages")) if path.is_dir()]
 
 
-def install_arguments(prefix, runtime, source=None):
+def install_arguments(prefix, runtime, sources=()):
     # --prefix keeps the interpreter's bundled distributions visible to pip,
     # such as cffi on PyPy. --target would reinstall them from PyPI.
     arguments = [
@@ -318,54 +335,61 @@ def install_arguments(prefix, runtime, source=None):
         "install", "--only-binary=:all:", "--index-url", "https://pypi.org/simple/",
         "--timeout", "10", "--retries", "1", "--no-warn-script-location", "--prefix", str(prefix),
     ]
-    if source:
-        # Only the tested project may build from its sdist; its dependencies stay wheel-only.
-        arguments.extend(("--no-binary", source))
+    if sources:
+        # Only the distributions without any wheel may build from their sdist.
+        arguments.extend(("--no-binary", ",".join(sources)))
     if runtime == "graalpy":
         arguments.extend(("--extra-index-url", "https://gds.oracle.com/repositories/pypi/public-release/"))
     return arguments
 
 
 NATIVE_SUFFIXES = (".so", ".pyd", ".dylib", ".dll")
+# Builds from an sdist run without compilers, so a distribution with optional C
+# speedups, such as PyYAML or MarkupSafe, installs its pure-Python version whatever
+# the machine has installed, and one that needs native code fails.
+NO_COMPILER = {"CC": "false", "CXX": "false", "LDSHARED": "false", "CARGO": "false"}
+# How many distributions of one installation may build from their sdist.
+SDIST_LIMIT = 3
 
 
-def compiled_files(prefix):
-    return [path for path in prefix.glob("**/*") if path.suffix in NATIVE_SUFFIXES and path.is_file()]
+def compiled_files(prefix, sources):
+    """Native files installed by the distributions built from their sdist."""
+    wanted = {canonical(name) for name in sources}
+    return [line.split(",")[0] for record in prefix.glob("**/*.dist-info/RECORD")
+            if canonical(record.parent.name.removesuffix(".dist-info").rsplit("-", 1)[0]) in wanted
+            for line in record.read_text(encoding="utf-8").splitlines()
+            if line.split(",")[0].endswith(NATIVE_SUFFIXES)]
 
 
-def install_and_import(package, runtime, executable, root, pip, tag, source=False):
-    """Install and import a package. With source=True the project itself may build from its
-    sdist, which tells a release that only lacks a wheel from one that needs a compiler."""
+def install_and_import(package, runtime, executable, root, pip, tag, sources=()):
+    """Install and import a package. When the project or one of its dependencies has no
+    wheel at all, the installation is tried again with that distribution built from its
+    sdist, without a compiler: a pure-Python distribution only lacks a wheel."""
     project, version = package["project"], package["version"]
     with TemporaryDirectory(prefix=f"{runtime}-{project}-", dir=root) as temporary:
         working = Path(temporary)
         prefix = working / "prefix"
-        arguments = install_arguments(prefix, runtime, project if source else None)
         try:
             installation = launch(executable, working, "-c", START_PIP, str(pip),
-                                  *arguments, f"{project}=={version}", timeout=65)
+                                  *install_arguments(prefix, runtime, sources), f"{project}=={version}",
+                                  timeout=65, extra_environment=NO_COMPILER if sources else None)
         except subprocess.TimeoutExpired:
-            return result("installTimeout")
+            return result("sdistRejected" if sources else "installTimeout")
         except OSError:
             return result("blocked")
         if installation.returncode:
-            output = installation.stderr + installation.stdout
-            dependency = blocked_by(package, output, tag, root)
-            if dependency:
-                return dependency
-            for line in reversed(installation.stderr.splitlines()):
-                if "No matching distribution found" in line:
-                    outcome = missing_wheel(package, line, tag, root)
-                    if outcome["status"] == "noWheel" and not source and sdist_fallback(package, line):
-                        built = install_and_import(package, runtime, executable, root, pip, tag, source=True)
-                        if built["status"] != "noWheel" and built.pop("pure", False):
-                            return built
-                    return outcome
-            return result("installError", diagnostic(installation, root))
+            outcome, missing = install_failure(package, installation, tag, root)
+            if sources and outcome["status"] == "installError":
+                return result("sdistRejected")
+            if missing and canonical(missing) not in map(canonical, sources) and len(sources) < SDIST_LIMIT:
+                retried = install_and_import(package, runtime, executable, root, pip, tag, (*sources, missing))
+                if retried["status"] != "sdistRejected":
+                    return retried
+                outcome["detail"] = f"{outcome['detail']}\nIts sdist does not build without a compiler.".strip()
+            return outcome
+        if compiled_files(prefix, sources):
+            return result("sdistRejected")
 
-        if source and compiled_files(prefix):
-            # A build that needed a compiler depends on the machine, not on the interpreter.
-            return result("noWheel", "The release publishes no wheel for this interpreter and its sdist compiles native code.")
         directories = site_directories(prefix)
         if not directories:
             return result("installError", "pip did not create a site-packages directory.")
@@ -383,10 +407,9 @@ def install_and_import(package, runtime, executable, root, pip, tag, source=Fals
         except (IndexError, ValueError):
             return result("blocked", diagnostic(imported, root))
         outcome["detail"] = outcome["detail"].replace(str(root), "<test directory>")[:1000]
-        if source:
-            outcome["pure"] = True
-            outcome["detail"] = ("Built from the pure-Python sdist: no wheel for this interpreter. "
-                                 + outcome["detail"]).strip()
+        if sources:
+            built = ", ".join(sources)
+            outcome["detail"] = f"Built from the pure-Python sdist, no wheel for this interpreter: {built}. {outcome['detail']}".strip()
         return outcome
 
 
